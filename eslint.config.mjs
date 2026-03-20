@@ -15,6 +15,7 @@ export default [
     },
     rules: {
       ...tsPlugin.configs["recommended"].rules,
+      "@typescript-eslint/no-namespace": ["error", { allowDeclarations: true }], // allow declare namespace for module augmentation (e.g. extending Express types)
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-unused-vars": [
         "error",
