@@ -1,0 +1,30 @@
+{
+  "name": "@chronos/orchestrator",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "start": "node dist/server.js",
+    "test": "jest --passWithNoTests",
+    "lint": "eslint src/",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@chronos/shared": "workspace:*",
+    "express": "^4.19.0",
+    "mongoose": "^8.5.0",
+    "ioredis": "^5.4.0",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "@types/express": "^4.17.0",
+    "@types/uuid": "^10.0.0",
+    "ts-node-dev": "^2.0.0",
+    "jest": "^29.0.0",
+    "ts-jest": "^29.0.0",
+    "@types/jest": "^29.0.0"
+  }
+}
