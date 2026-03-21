@@ -8,6 +8,7 @@
     "dev": {
       "dependsOn": ["^build"],
       "persistent": true,
+      "outputs": [],
       "cache": false
     },
     "test": {

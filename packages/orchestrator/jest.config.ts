@@ -5,7 +5,6 @@ const config: Config = {
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
   testMatch: ['**/*.test.ts'],
-  setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup.ts'],
   testTimeout: 30000,
   collectCoverageFrom: ['src/**/*.ts', '!src/server.ts'],
 };
