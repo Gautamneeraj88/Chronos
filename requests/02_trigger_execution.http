@@ -1,0 +1,16 @@
+### 
+
+
+###
+
+POST {{baseUrl}}/workflows/WORKFLOW_ID_HERE/executions HTTP/1.1
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJkZXYtdXNlci0wMDEiLCJlbWFpbCI6ImRldkBjaHJvbm9zLmxvY2FsIiwiaWF0IjoxNzc0MDgzNjEyLCJle
+Content-Type: application/json
+
+{
+  "input": {
+    "amount": 9999,
+    "customerId": "cust-xyz",
+    "orderId": "ord-001"
+  }
+}

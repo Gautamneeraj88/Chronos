@@ -114,7 +114,7 @@ export class SagaEngine {
         (step) =>
           state.completedSteps.has(step.name) &&
           step.compensation !== null &&
-          !state.compensatedSteps.has(step.name),
+          !state.compensatedSteps.has(step.compensation),
       )
       .reverse(); // reverse = undo last thing first
 

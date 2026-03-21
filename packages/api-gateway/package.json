@@ -8,6 +8,7 @@
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "start": "node dist/server.js",
     "test": "jest --passWithNoTests",
+    "test:integration": "jest --config jest.integration.config.ts",
     "lint": "eslint src/",
     "clean": "rm -rf dist"
   },

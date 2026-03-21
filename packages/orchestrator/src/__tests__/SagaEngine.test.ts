@@ -1,4 +1,4 @@
-import { SagaEngine, SagaAction } from '../domain';
+import { SagaEngine } from '../domain';
 import { WorkflowDefinition, DomainEvent } from '@chronos/shared';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -186,7 +186,7 @@ describe('SagaEngine', () => {
         makeEvent('STEP_COMPLETED', 'charge-card', 10),
         makeEvent('STEP_COMPLETED', 'update-inventory', 20),
         makeEvent('STEP_FAILED', 'send-confirmation', 30),
-        makeEvent('COMPENSATION_COMPLETED', 'update-inventory', 40),
+        makeEvent('COMPENSATION_COMPLETED', 'restore-inventory', 40), // compensation name, not step name
       ];
 
       const action = engine.determineNextAction(threeStepWorkflow, events);
@@ -204,8 +204,8 @@ describe('SagaEngine', () => {
         makeEvent('STEP_COMPLETED', 'charge-card', 10),
         makeEvent('STEP_COMPLETED', 'update-inventory', 20),
         makeEvent('STEP_FAILED', 'send-confirmation', 30),
-        makeEvent('COMPENSATION_COMPLETED', 'update-inventory', 40),
-        makeEvent('COMPENSATION_COMPLETED', 'charge-card', 50),
+        makeEvent('COMPENSATION_COMPLETED', 'restore-inventory', 40), // compensation name, not step name
+        makeEvent('COMPENSATION_COMPLETED', 'refund-card', 50),       // compensation name, not step name
       ];
 
       const action = engine.determineNextAction(threeStepWorkflow, events);

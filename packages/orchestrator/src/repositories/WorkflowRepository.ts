@@ -2,12 +2,12 @@ import { v4 as uuidv4 } from 'uuid';
 import {
   WorkflowDefinition,
   CreateWorkflowInput,
-  NotFoundError,
   ConflictError,
   DEFAULT_RETRIES,
   DEFAULT_TIMEOUT_MS,
 } from '@chronos/shared';
 import { WorkflowModel } from '../models';
+import { WorkflowDocument } from '../models/workflow.model';
 import { IWorkflowRepository } from './IWorkflowRepository';
 
 export class MongoWorkflowRepository implements IWorkflowRepository {
@@ -54,7 +54,7 @@ export class MongoWorkflowRepository implements IWorkflowRepository {
   // Convert Mongoose document to plain object
   // Never return raw Mongoose documents outside the repository
   // They carry extra methods and proxies that cause subtle bugs
-  private toPlain(doc: any): WorkflowDefinition {
+  private toPlain(doc: WorkflowDocument): WorkflowDefinition {
     return {
       id: doc.id,
       name: doc.name,

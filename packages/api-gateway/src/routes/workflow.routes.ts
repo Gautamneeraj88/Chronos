@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { IOrchestratorClient } from '../http';
 import { authMiddleware } from '../middleware';
-import { CreateWorkFlowSchema, ValidationError } from '@chronos/shared';
+import { CreateWorkflowSchema, TriggerExecutionSchema, ValidationError } from '@chronos/shared';
 import { loadConfig } from '../config/config';
 
 export function workflowRouter(orchestrator: IOrchestratorClient): Router {
@@ -13,7 +13,7 @@ export function workflowRouter(orchestrator: IOrchestratorClient): Router {
   router.post('/', protect, async (req: Request, res: Response, next: NextFunction) => {
     try {
       // Validdate the request body with Zod
-      const parsed = CreateWorkFlowSchema.safeParse(req.body);
+      const parsed = CreateWorkflowSchema.safeParse(req.body);
       if (!parsed.success) {
         throw new ValidationError(parsed.error.issues[0].message);
       }
@@ -35,11 +35,30 @@ export function workflowRouter(orchestrator: IOrchestratorClient): Router {
     }
   });
 
-  //GET /workflows/:id - get one definition
+  // GET /workflows/:id - get one definition
   router.get('/:id', protect, async (req: Request, res: Response, next: NextFunction) => {
     try {
       const workflow = await orchestrator.getWorkflow(req.params.id);
       res.status(200).json(workflow);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // POST /workflows/:id/executions - trigger an execution
+  router.post('/:id/executions', protect, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const parsed = TriggerExecutionSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new ValidationError(parsed.error.issues[0].message);
+      }
+
+      const execution = await orchestrator.triggerExecution(
+        req.params.id,
+        parsed.data.input,
+        req.user!.userId,
+      );
+      res.status(201).json(execution);
     } catch (err) {
       next(err);
     }

@@ -2,7 +2,7 @@
  * How many times an activity retries before giving up
  * Used in WorkflowStep when no explicit retries value is provided
  */
-export const DEFAULT_RETERIES = 3;
+export const DEFAULT_RETRIES = 3;
 
 /* NOTE:
  * How long (ms) as activity is allowed to run before timeout

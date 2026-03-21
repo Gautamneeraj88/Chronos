@@ -1,5 +1,5 @@
 import { Execution, ExecutionStatus, NotFoundError } from '@chronos/shared';
-import { ExecutionModel } from '../models/execution.model';
+import { ExecutionDocument, ExecutionModel } from '../models/execution.model';
 import { IExecutionRepository } from './IExecutionRepository';
 
 export class MongoExecutionRepository implements IExecutionRepository {
@@ -8,7 +8,7 @@ export class MongoExecutionRepository implements IExecutionRepository {
     return this.toPlain(doc);
   }
 
-  async getById(id: string): Promise<Execution> {
+  async findById(id: string): Promise<Execution | null> {
     const doc = await ExecutionModel.findOne({ id });
     return doc ? this.toPlain(doc) : null;
   }
@@ -30,7 +30,7 @@ export class MongoExecutionRepository implements IExecutionRepository {
     }
   }
 
-  private toPlain(doc: any): Execution {
+  private toPlain(doc: ExecutionDocument): Execution {
     return {
       id: doc.id,
       workflowId: doc.workflowId,

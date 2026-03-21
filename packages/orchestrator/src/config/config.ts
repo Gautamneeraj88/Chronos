@@ -5,7 +5,7 @@ const ConfigSchema = z.object({
   mongoUri: z.string().min(1),
   redisUri: z.string().min(1),
   nodeEnv: z.enum(['development', 'production', 'test']).default('development'),
-  logLevel: z..enum(['debug', 'info', 'warn', 'error']).default('info'),
+  logLevel: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 });
 
 export type OrchestratorConfig = z.infer<typeof ConfigSchema>;
@@ -14,7 +14,7 @@ export function loadConfig(): OrchestratorConfig {
   const result = ConfigSchema.safeParse({
     port:     process.env.ORCHESTRATOR_PORT,
     mongoUri: process.env.MONGODB_URI,
-    redisUrl: process.env.REDIS_URL,
+    redisUri: process.env.REDIS_URL,
     nodeEnv:  process.env.NODE_ENV,
     logLevel: process.env.LOG_LEVEL,
   });

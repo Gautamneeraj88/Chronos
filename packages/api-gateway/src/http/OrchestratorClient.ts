@@ -25,7 +25,6 @@ export class OrchestratorClient implements IOrchestratorClient {
       (res) => res,
       (err) => {
         const status = err.response?.status;
-        const code = err.response?.data?.error?.code;
         const message = err.response?.data?.error?.message ?? err.message;
 
         if (status === 404) throw new NotFoundError(message);
@@ -54,7 +53,7 @@ export class OrchestratorClient implements IOrchestratorClient {
     input: Record<string, unknown>,
     userId: string,
   ): Promise<Execution> {
-    const { data: res } = await this.http.post('/internal/execution', {
+    const { data: res } = await this.http.post('/internal/executions', {
       workflowId,
       input,
       userId,

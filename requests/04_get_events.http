@@ -1,0 +1,2 @@
+GET {{baseUrl}}/executions/EXECUTION_ID_HERE/events
+Authorization: Bearer YOUR_TOKEN_HERE

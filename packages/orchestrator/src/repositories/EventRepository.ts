@@ -9,7 +9,7 @@ export class MongoEventRepository implements IEventRepository {
     await EventModel.create(event);
   }
 
-  async getByExecutionId(executionId: string): Promise<DomainEvent> {
+  async findByExecutionId(executionId: string): Promise<DomainEvent[]> {
     const docs = await EventModel.find({ executionId }).sort({ occurredAt: 1 }); // ASC — oldest first, critical for event replay
 
     return docs.map((doc) => ({

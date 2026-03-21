@@ -9,8 +9,8 @@ export class ValidationError extends ChronosError {
 }
 
 export class UnauthorizedError extends ChronosError {
-  constructor(message = "Insufficient permissions") {
-    super("FORBIDDEN", message, 403);
+  constructor(message = "Authentication required") {
+    super("UNAUTHORIZED", message, 401);
   }
 }
 

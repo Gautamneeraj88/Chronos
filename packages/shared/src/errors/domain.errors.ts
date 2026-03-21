@@ -25,7 +25,7 @@ export class SagaError extends ChronosError {
 }
 
 // INFO: Thrown when an activity (step) fails after all retries exhausted
-export class ActitityError extends ChronosError {
+export class ActivityError extends ChronosError {
   public readonly stepName: string;
   public readonly attempt: number;
 
