@@ -1,9 +1,8 @@
 //TODO: WorkflowDefinition, WorkflowStep
 
-
-export interface WoekflowStep {
+export interface WorkflowStep {
   name: string;
-  type: "activity";
+  type: 'activity';
   retries: number;
   timeoutMs: number;
   compensation: string | null;
@@ -13,9 +12,7 @@ export interface WorkflowDefinition {
   id: string;
   name: string;
   version: number;
-  steps: WoekflowStep[];
+  steps: WorkflowStep[];
   createdAt: Date;
   updatedAt: Date;
 }
-
-

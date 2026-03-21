@@ -13,18 +13,21 @@
   },
   "dependencies": {
     "@chronos/shared": "workspace:*",
-    "express": "^4.19.0",
-    "mongoose": "^8.5.0",
-    "ioredis": "^5.4.0",
-    "uuid": "^10.0.0"
+    "dotenv": "^17.3.1",
+    "express": "^4.22.1",
+    "ioredis": "^5.10.1",
+    "mongoose": "^8.23.0",
+    "uuid": "^10.0.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
-    "typescript": "^5.5.0",
     "@types/express": "^4.17.0",
+    "@types/jest": "^29.0.0",
     "@types/uuid": "^10.0.0",
-    "ts-node-dev": "^2.0.0",
     "jest": "^29.0.0",
+    "mongodb-memory-server": "^11.0.1",
     "ts-jest": "^29.0.0",
-    "@types/jest": "^29.0.0"
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.5.0"
   }
 }
