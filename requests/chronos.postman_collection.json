@@ -1,0 +1,183 @@
+{
+  "info": {
+    "name": "Chronos",
+    "_postman_id": "chronos-collection-v1",
+    "description": "Chronos workflow orchestration API — orchestrator internal routes (port 3001)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "orchestratorUrl",
+      "value": "http://localhost:3001",
+      "type": "string"
+    },
+    {
+      "key": "gatewayUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "workflowId",
+      "value": "",
+      "type": "string",
+      "description": "Set after POST /internal/workflows"
+    },
+    {
+      "key": "executionId",
+      "value": "",
+      "type": "string",
+      "description": "Set after POST /internal/executions"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Orchestrator Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{orchestratorUrl}}/health",
+              "host": ["{{orchestratorUrl}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "Gateway Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gatewayUrl}}/health",
+              "host": ["{{gatewayUrl}}"],
+              "path": ["health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Workflows",
+      "item": [
+        {
+          "name": "Register Workflow",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.id) pm.collectionVariables.set('workflowId', res.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"order-processing-v3\",\n  \"steps\": [\n    {\n      \"name\": \"charge-card\",\n      \"type\": \"activity\",\n      \"retries\": 3,\n      \"timeoutMs\": 5000,\n      \"compensation\": \"refund-card\"\n    },\n    {\n      \"name\": \"update-inventory\",\n      \"type\": \"activity\",\n      \"retries\": 3,\n      \"timeoutMs\": 5000,\n      \"compensation\": \"restore-inventory\"\n    },\n    {\n      \"name\": \"send-confirmation\",\n      \"type\": \"activity\",\n      \"retries\": 2,\n      \"timeoutMs\": 5000,\n      \"compensation\": null\n    }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{orchestratorUrl}}/internal/workflows",
+              "host": ["{{orchestratorUrl}}"],
+              "path": ["internal", "workflows"]
+            }
+          }
+        },
+        {
+          "name": "List Workflows",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{orchestratorUrl}}/internal/workflows",
+              "host": ["{{orchestratorUrl}}"],
+              "path": ["internal", "workflows"]
+            }
+          }
+        },
+        {
+          "name": "Get Workflow by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{orchestratorUrl}}/internal/workflows/{{workflowId}}",
+              "host": ["{{orchestratorUrl}}"],
+              "path": ["internal", "workflows", "{{workflowId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Executions",
+      "item": [
+        {
+          "name": "Trigger Execution",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.id) pm.collectionVariables.set('executionId', res.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workflowId\": \"{{workflowId}}\",\n  \"userId\": \"dev-user-001\",\n  \"input\": {\n    \"orderId\": \"ord-001\",\n    \"customerId\": \"cust-xyz\",\n    \"amount\": 9999\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{orchestratorUrl}}/internal/executions",
+              "host": ["{{orchestratorUrl}}"],
+              "path": ["internal", "executions"]
+            }
+          }
+        },
+        {
+          "name": "Get Execution",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{orchestratorUrl}}/internal/executions/{{executionId}}",
+              "host": ["{{orchestratorUrl}}"],
+              "path": ["internal", "executions", "{{executionId}}"]
+            }
+          }
+        },
+        {
+          "name": "Get Execution Events",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{orchestratorUrl}}/internal/executions/{{executionId}}/events",
+              "host": ["{{orchestratorUrl}}"],
+              "path": ["internal", "executions", "{{executionId}}", "events"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

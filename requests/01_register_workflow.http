@@ -1,0 +1,46 @@
+### 
+
+POST {{baseUrl}}/workflows HTTP/1.1
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJkZXYtdXNlci0wMDEiLCJlbWFpbCI6ImRldkBjaHJvbm9zLmxvY2FsIiwiaWF0IjoxNzc0MDgzNjEyLCJle
+Content-Type: application/json
+
+{
+  "name": "order-processing",
+  "steps": [
+    {
+      "compensation": "refund-card",
+      "name": "charge-card",
+      "retries": 3,
+      "timeoutMs": 5000,
+      "type": "activity"
+    },
+    {
+      "compensation": null,
+      "name": "refund-card",
+      "retries": 1,
+      "timeoutMs": 5000,
+      "type": "activity"
+    },
+    {
+      "compensation": "restore-inventory",
+      "name": "update-inventory",
+      "retries": 3,
+      "timeoutMs": 5000,
+      "type": "activity"
+    },
+    {
+      "compensation": null,
+      "name": "restore-inventory",
+      "retries": 1,
+      "timeoutMs": 5000,
+      "type": "activity"
+    },
+    {
+      "compensation": null,
+      "name": "send-confirmation",
+      "retries": 2,
+      "timeoutMs": 5000,
+      "type": "activity"
+    }
+  ]
+}

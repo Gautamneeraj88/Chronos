@@ -1,0 +1,8 @@
+### 
+
+POST http://localhost:3000/workflows HTTP/1.1
+Content-Type: application/json
+
+{
+  "name": "test"
+}
