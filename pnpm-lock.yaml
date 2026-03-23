@@ -115,6 +115,9 @@ importers:
 
   packages/orchestrator:
     dependencies:
+      '@chronos/kafka':
+        specifier: workspace:^
+        version: link:../kafka
       '@chronos/shared':
         specifier: workspace:*
         version: link:../shared
