@@ -1,46 +1,16 @@
-### 
+###
 
 POST {{baseUrl}}/workflows HTTP/1.1
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJkZXYtdXNlci0wMDEiLCJlbWFpbCI6ImRldkBjaHJvbm9zLmxvY2FsIiwiaWF0IjoxNzc0MDgzNjEyLCJle
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJkZXYtdXNlci0wMDEiLCJlbWFpbCI6ImRldkBjaHJvbm9zLmxvY2FsIiwiaWF0IjoxNzc0MzMyNzU1LCJleHAiOjE3NzY5MjQ3NTV9.X3MELyxmLaBgmrIp4ZAuObG_SopBQLGJsgoifmUepzc
 Content-Type: application/json
 
 {
   "name": "order-processing",
   "steps": [
-    {
-      "compensation": "refund-card",
-      "name": "charge-card",
-      "retries": 3,
-      "timeoutMs": 5000,
-      "type": "activity"
-    },
-    {
-      "compensation": null,
-      "name": "refund-card",
-      "retries": 1,
-      "timeoutMs": 5000,
-      "type": "activity"
-    },
-    {
-      "compensation": "restore-inventory",
-      "name": "update-inventory",
-      "retries": 3,
-      "timeoutMs": 5000,
-      "type": "activity"
-    },
-    {
-      "compensation": null,
-      "name": "restore-inventory",
-      "retries": 1,
-      "timeoutMs": 5000,
-      "type": "activity"
-    },
-    {
-      "compensation": null,
-      "name": "send-confirmation",
-      "retries": 2,
-      "timeoutMs": 5000,
-      "type": "activity"
-    }
+    { "name": "charge-card",       "type": "activity", "activity": "chargeCard",       "retries": 3, "timeoutMs": 5000, "compensation": "refund-card" },
+    { "name": "refund-card",       "type": "activity", "activity": "refundCard",       "retries": 1, "timeoutMs": 5000, "compensation": null },
+    { "name": "update-inventory",  "type": "activity", "activity": "updateInventory",  "retries": 3, "timeoutMs": 5000, "compensation": "restore-inventory" },
+    { "name": "restore-inventory", "type": "activity", "activity": "restoreInventory", "retries": 1, "timeoutMs": 5000, "compensation": null },
+    { "name": "send-confirmation", "type": "activity", "activity": "sendConfirmation", "retries": 2, "timeoutMs": 5000, "compensation": null }
   ]
 }

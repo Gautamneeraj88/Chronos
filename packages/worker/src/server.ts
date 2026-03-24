@@ -1,3 +1,4 @@
+process.env.KAFKAJS_NO_PARTITIONER_WARNING = '1';
 import 'dotenv/config';
 import express from 'express';
 import { loadConfig } from './config/config';
@@ -10,7 +11,7 @@ async function bootstrap(): Promise<void> {
   const logger = createLogger('worker');
 
   //1. Connect to kafka
-const kafkaClient = KafkaClient.getInstance({
+  const kafkaClient = KafkaClient.getInstance({
     clientId: config.workerId,
     brokers: config.kafkaBrokers,
   });

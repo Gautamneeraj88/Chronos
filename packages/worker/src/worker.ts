@@ -1,7 +1,7 @@
 import { KafkaClient, TOPICS } from '@chronos/kafka';
 import { StepExecuteMessage, StepResultMessage, createLogger } from '@chronos/shared';
 import { ActivityRunner } from './activities/ActivityRunner';
-import { Producer } from 'kafkajs';
+type Producer = Awaited<ReturnType<KafkaClient['getProducer']>>;
 
 const logger = createLogger('worker');
 
@@ -79,7 +79,7 @@ export class Worker {
     try {
       const output = await this.activityRunner.execute(
         // ActivityRunner expects a WorkflowStep shape
-        { name: stepId, activity: activityName, compensation: null },
+        { name: stepId, type: 'activity' as const, activity: activityName, retries: 3, timeoutMs: 30_000, compensation: null },
         input,
       );
 
@@ -98,6 +98,7 @@ export class Worker {
         executionId,
         stepId,
         success: false,
+        output: {},
         error,
       };
 
