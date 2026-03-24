@@ -4,6 +4,24 @@ import { ExecutionService }  from '../services/ExecutionService';
 import { ApiKeyService }     from '../services/ApiKeyService';
 import { CreateWorkflowSchema, TriggerExecutionSchema, ValidationError } from '@chronos/shared';
 
+// Guards POST /api-keys when ADMIN_TOKEN env var is set.
+// In dev (no ADMIN_TOKEN), the route is open for bootstrapping.
+// In production, set ADMIN_TOKEN to a strong secret and pass it as X-Admin-Token.
+function requireAdminToken(req: Request, res: Response, next: NextFunction): void {
+  const adminToken = process.env.ADMIN_TOKEN;
+  if (!adminToken) {
+    // No token configured — allow (dev/bootstrap mode)
+    next();
+    return;
+  }
+  const provided = req.headers['x-admin-token'];
+  if (provided !== adminToken) {
+    res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Invalid admin token' } });
+    return;
+  }
+  next();
+}
+
 const apiKeyService = new ApiKeyService();
 
 export function internalRouter(
@@ -97,7 +115,8 @@ export function internalRouter(
 
   // POST /internal/api-keys — create a new API key for an org.
   // The raw key is returned ONCE and never stored in plaintext.
-  router.post('/api-keys', async (req: Request, res: Response, next: NextFunction) => {
+  // Protected by requireAdminToken when ADMIN_TOKEN env var is set.
+  router.post('/api-keys', requireAdminToken, async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { orgId, userId, name } = req.body;
       if (!orgId || !name) throw new ValidationError('orgId and name are required');
