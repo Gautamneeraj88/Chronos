@@ -7,10 +7,12 @@ import { MongoWorkflowRepository } from './repositories/WorkflowRepository';
 import { MongoExecutionRepository } from './repositories/ExecutionRepository';
 import { MongoEventRepository } from './repositories/EventRepository';
 import { RedisLockService } from './locks/RedisLockService';
+import { RedisTimeoutStore } from './timeouts/RedisTimeoutStore';
 import { SagaEngine } from './domain/SagaEngine';
 import { WorkflowService } from './services/WorkflowService';
 import { ExecutionService } from './services/ExecutionService';
 import { StepPublisher } from './services/StepPublisher';
+import { TimeoutChecker } from './services/TimeoutChecker';
 import { ResultConsumer } from './services/ResultConsumer';
 import { RecoveryEngine } from './recovery';
 import { createApp } from './app';
@@ -38,6 +40,7 @@ async function bootstrap(): Promise<void> {
 
   // 4. Instantiate domain + infrastructure services
   const lockService = new RedisLockService(redis);
+  const timeoutStore = new RedisTimeoutStore(redis);
   const sagaEngine = new SagaEngine();
   const stepPublisher = new StepPublisher(kafkaClient);
 
@@ -50,6 +53,7 @@ async function bootstrap(): Promise<void> {
     lockService,
     sagaEngine,
     stepPublisher,
+    timeoutStore,
   );
 
   // 6. Recovery — MUST complete before accepting requests
@@ -74,6 +78,10 @@ async function bootstrap(): Promise<void> {
   // 8. Start Kafka result consumer (non-blocking — consumer group join is async)
   const resultConsumer = new ResultConsumer(kafkaClient, executionService);
   await resultConsumer.start();
+
+  // 9. Start timeout checker
+  const timeoutChecker = new TimeoutChecker(timeoutStore, executionService);
+  timeoutChecker.start();
 }
 
 bootstrap().catch((err) => {

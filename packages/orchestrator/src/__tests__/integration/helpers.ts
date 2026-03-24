@@ -6,6 +6,7 @@ import { MongoWorkflowRepository }  from '../../repositories/WorkflowRepository'
 import { MongoExecutionRepository } from '../../repositories/ExecutionRepository';
 import { MongoEventRepository }     from '../../repositories/EventRepository';
 import { RedisLockService }         from '../../locks/RedisLockService';
+import { ITimeoutStore }            from '../../timeouts/ITimeoutStore';
 import { SagaEngine }               from '../../domain/SagaEngine';
 import { ActivityRunner }           from '../../activities/ActivityRunner';
 import { WorkflowService }          from '../../services/WorkflowService';
@@ -29,6 +30,13 @@ export async function buildTestApp(): Promise<Express> {
   const sagaEngine     = new SagaEngine();
   const activityRunner = new ActivityRunner();
 
+  // No-op timeout store — integration tests don't need Redis sorted-set timeouts
+  const timeoutStore: ITimeoutStore = {
+    schedule: async () => {},
+    cancel: async () => {},
+    consumeExpired: async () => [],
+  };
+
   // Loopback publisher: runs activities in-process and feeds results back into
   // ExecutionService — keeps integration tests synchronous without needing Kafka.
   // executionService is assigned below after construction (late binding).
@@ -39,8 +47,8 @@ export async function buildTestApp(): Promise<Express> {
         name: message.stepId,
         type: 'activity' as const,
         activity: message.activityName,
-        retries: 3,
-        timeoutMs: 5000,
+        retries: message.retries,
+        timeoutMs: message.timeoutMs,
         compensation: null,
       };
       try {
@@ -71,6 +79,7 @@ export async function buildTestApp(): Promise<Express> {
     lockService,
     sagaEngine,
     stepPublisher,
+    timeoutStore,
   );
 
   return createApp({ workflowService, executionService });
@@ -81,8 +90,9 @@ export async function cleanDatabase(): Promise<void> {
   for (const key in collections) {
     await collections[key].deleteMany({});
   }
-  const keys = await redisClient.keys('lock:*');
-  if (keys.length > 0) await redisClient.del(...keys);
+  const lockKeys = await redisClient.keys('lock:*');
+  if (lockKeys.length > 0) await redisClient.del(...lockKeys);
+  await redisClient.del('chronos:pending-timeouts');
 }
 
 export async function teardown(): Promise<void> {

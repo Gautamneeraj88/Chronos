@@ -48,6 +48,8 @@ function makePayload(overrides: Partial<StepExecuteMessage> = {}): StepExecuteMe
     activityName: 'chargeCard',
     input: { orderId: 'ord-001', amount: 99.99 },
     attemptNumber: 1,
+    retries: 3,
+    timeoutMs: 30_000,
     ...overrides,
   };
 }
@@ -113,33 +115,62 @@ describe('Worker', () => {
     });
   });
 
-  describe('eachMessage — failure path', () => {
+  describe('eachMessage — failure + retry path', () => {
     beforeEach(async () => {
+      jest.useFakeTimers();
       await worker.start();
     });
 
-    it('publishes failure result when activity throws', async () => {
-      // Use an unregistered activity name to force a failure
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('re-publishes to STEP_EXECUTE with attemptNumber+1 when retries remain', async () => {
       const payload = makePayload({
         activityName: 'nonExistentActivity',
-        stepId: 'bad-step',
+        stepId: 'bad-step',  // not in registry → throws immediately, no withTimeout delay
+        attemptNumber: 1,
+        retries: 3,
+      });
+
+      const handlerPromise = mockEachMessageHandler(makeMessage(payload));
+      // runAllTimersAsync interleaves timer advancement with promise resolution,
+      // so it fires the retry setTimeout even though it's registered after an await.
+      await jest.runAllTimersAsync();
+      await handlerPromise;
+
+      expect(mockSend).toHaveBeenCalledTimes(1);
+      const call = mockSend.mock.calls[0][0];
+      expect(call.topic).toBe(TOPICS.STEP_EXECUTE);
+
+      const retried = JSON.parse(call.messages[0].value);
+      expect(retried.attemptNumber).toBe(2);
+      expect(retried.stepId).toBe('bad-step');
+    });
+
+    it('publishes failure to STEP_RESULT when all retries exhausted', async () => {
+      const payload = makePayload({
+        activityName: 'nonExistentActivity',
+        stepId: 'bad-step',  // not in registry → immediate throw, no timer needed
+        attemptNumber: 4,
+        retries: 3,
       });
 
       await mockEachMessageHandler(makeMessage(payload));
 
       expect(mockSend).toHaveBeenCalledTimes(1);
       const call = mockSend.mock.calls[0][0];
-      const result = JSON.parse(call.messages[0].value);
+      expect(call.topic).toBe(TOPICS.STEP_RESULT);
 
+      const result = JSON.parse(call.messages[0].value);
       expect(result.success).toBe(false);
       expect(result.error).toBeDefined();
-      expect(typeof result.error).toBe('string');
     });
 
     it('does not throw when activity fails — consumer must stay alive', async () => {
-      const payload = makePayload({ activityName: 'nonExistentActivity' });
+      // stepId 'bad-step' is not in the registry → immediate ActivityError, no timer
+      const payload = makePayload({ activityName: 'nonExistentActivity', stepId: 'bad-step', retries: 0 });
 
-      // Should not throw — a crash here would kill the consumer
       await expect(mockEachMessageHandler(makeMessage(payload))).resolves.not.toThrow();
     });
   });

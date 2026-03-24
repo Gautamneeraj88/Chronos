@@ -6,6 +6,8 @@ export interface StepExecuteMessage {
   activityName: string;
   input: Record<string, unknown>;
   attemptNumber: number;
+  retries: number;
+  timeoutMs: number;
 }
 
 //What the worker publishes to chronos.step.result
@@ -15,4 +17,13 @@ export interface StepResultMessage {
   success: boolean;
   output: Record<string, unknown>;
   error?: string;
+}
+
+interface DlqMessage {
+  originalTopic: string;
+  originalPayload: string; // raw string, unparseable
+  reason: string;
+  failedAt: string; // ISO timestamps
+  executionId?: string;
+  stepId?: string;
 }

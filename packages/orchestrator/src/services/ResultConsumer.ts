@@ -1,6 +1,6 @@
-import { KafkaClient, TOPICS } from "@chronos/kafka";
-import { StepResultMessage, createLogger } from "@chronos/shared";
-import { ExecutionService } from "./ExecutionService";
+import { KafkaClient, TOPICS } from '@chronos/kafka';
+import { StepResultMessage, createLogger } from '@chronos/shared';
+import { ExecutionService } from './ExecutionService';
 
 const logger = createLogger('orchestrator');
 
@@ -23,10 +23,10 @@ export class ResultConsumer {
     });
 
     await consumer.run({
-      eachMessage: async ({ message, partition, topic}) => {
+      eachMessage: async ({ message, partition, topic }) => {
         const raw = message.value?.toString();
-        if(!raw) {
-          logger.warn('Received empty message', { topic, partition});
+        if (!raw) {
+          logger.warn('Received empty message', { topic, partition });
           return;
         }
 

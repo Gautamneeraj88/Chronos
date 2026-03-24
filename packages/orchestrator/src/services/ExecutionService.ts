@@ -15,6 +15,7 @@ import { IWorkflowRepository } from '../repositories/IWorkflowRepository';
 import { ILockService } from '../locks/ILockService';
 import { SagaEngine } from '../domain/SagaEngine';
 import { StepPublisher } from './StepPublisher';
+import { ITimeoutStore } from '../timeouts';
 
 const logger = createLogger('orchestrator');
 
@@ -26,6 +27,7 @@ export class ExecutionService {
     private readonly lockService: ILockService,
     private readonly sagaEngine: SagaEngine,
     private readonly stepPublisher: StepPublisher,
+    private readonly timeoutStore: ITimeoutStore,
   ) {}
 
   // ── Trigger a brand new execution ───────────────────────────────────────
@@ -92,6 +94,9 @@ export class ExecutionService {
       return;
     }
 
+    // Step has reached a terminal state — cancel its pending timeout
+    await this.timeoutStore.cancel(executionId, stepId);
+
     // Append the result event.
     // Compensation steps complete with COMPENSATION_COMPLETED so the SagaEngine
     // can track which compensations have run (it ignores STEP_COMPLETED in that path).
@@ -137,6 +142,7 @@ export class ExecutionService {
   ): Promise<Execution> {
     const { id: executionId } = execution;
     let publishMessage: StepExecuteMessage | null = null;
+    let timeoutSchedule: { stepId: string; expiresAt: number } | null = null;
 
     await this.lockService.acquire(executionId, LOCK_TTL_MS);
 
@@ -191,7 +197,11 @@ export class ExecutionService {
           activityName: step.activity,
           input: execution.input,
           attemptNumber: 1,
+          retries: step.retries,
+          timeoutMs: step.timeoutMs,
         };
+        // Cancel any stale timeout (e.g. from a previous crash), then schedule fresh
+        timeoutSchedule = { stepId: step.name, expiresAt: Date.now() + step.timeoutMs };
         logger.info('Step dispatched to worker', { executionId, step: step.name });
       } else if (action.type === 'RUN_COMPENSATION') {
         const { stepName, stepIndex } = action;
@@ -204,6 +214,11 @@ export class ExecutionService {
         );
         await this.eventRepo.append(this.makeEvent(executionId, 'STEP_IN_FLIGHT', {}, stepName));
 
+        // Find the parent step to inherit retries/timeoutMs; fall back to safe defaults
+        const parentStep = workflow.steps.find((s) => s.compensation === stepName);
+        const retries = parentStep?.retries ?? 0;
+        const timeoutMs = parentStep?.timeoutMs ?? 30_000;
+
         // Compensation steps (e.g. 'refund-card') are not in workflow.steps — they are
         // referenced only as strings in step.compensation. The ActivityRunner registry
         // is keyed by step name, so stepName doubles as the activityName here.
@@ -214,7 +229,10 @@ export class ExecutionService {
           activityName: stepName,
           input: execution.input,
           attemptNumber: 1,
+          retries,
+          timeoutMs,
         };
+        timeoutSchedule = { stepId: stepName, expiresAt: Date.now() + timeoutMs };
         logger.info('Compensation dispatched to worker', { executionId, step: stepName });
       } else {
         throw new Error(`Unknown saga action: ${JSON.stringify(action)}`);
@@ -222,6 +240,12 @@ export class ExecutionService {
     } finally {
       // Always release before publishing so handleStepResult can re-acquire
       await this.lockService.release(executionId);
+    }
+
+    if (timeoutSchedule) {
+      // Cancel first to overwrite any stale entry from a previous crash
+      await this.timeoutStore.cancel(executionId, timeoutSchedule.stepId);
+      await this.timeoutStore.schedule(executionId, timeoutSchedule.stepId, timeoutSchedule.expiresAt);
     }
 
     if (publishMessage) {

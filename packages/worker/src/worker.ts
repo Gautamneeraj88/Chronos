@@ -64,58 +64,56 @@ export class Worker {
     payload: StepExecuteMessage,
     producer: Producer,
   ): Promise<void> {
-    const { executionId, stepId, activityName, input, attemptNumber } = payload;
+    const { executionId, stepId, activityName, input, attemptNumber, retries } = payload;
 
-    // Idempotency guard — log the attempt
-    logger.debug('Executing activity', {
-      executionId,
-      stepId,
-      activityName,
-      attemptNumber,
-    });
-
-    let result: StepResultMessage;
+    logger.debug('Executing activity', { executionId, stepId, activityName, attemptNumber });
 
     try {
       const output = await this.activityRunner.execute(
-        // ActivityRunner expects a WorkflowStep shape
-        { name: stepId, type: 'activity' as const, activity: activityName, retries: 3, timeoutMs: 30_000, compensation: null },
+        { name: stepId, type: 'activity' as const, activity: activityName, retries, timeoutMs: payload.timeoutMs, compensation: null },
         input,
       );
 
-      result = {
+      const result: StepResultMessage = {
         executionId,
         stepId,
         success: true,
         output: output as Record<string, unknown>,
       };
 
-      logger.info('Activity succeeded', { executionId, stepId });
+      logger.info('Activity succeeded', { executionId, stepId, attemptNumber });
+
+      await producer.send({
+        topic: TOPICS.STEP_RESULT,
+        messages: [{ key: executionId, value: JSON.stringify(result) }],
+      });
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
+      logger.warn('Activity failed', { executionId, stepId, attemptNumber, error });
 
-      result = {
-        executionId,
-        stepId,
-        success: false,
-        output: {},
-        error,
-      };
-
-      logger.warn('Activity failed', { executionId, stepId, error });
+      if (attemptNumber <= retries) {
+        // Exponential backoff before retrying: 1s, 2s, 4s, … capped at 30s
+        const delayMs = Math.min(1000 * Math.pow(2, attemptNumber - 1), 30_000);
+        logger.info('Retrying step', { executionId, stepId, nextAttempt: attemptNumber + 1, delayMs });
+        await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+        await producer.send({
+          topic: TOPICS.STEP_EXECUTE,
+          messages: [{ key: executionId, value: JSON.stringify({ ...payload, attemptNumber: attemptNumber + 1 }) }],
+        });
+      } else {
+        // All retries exhausted — report failure to orchestrator
+        const result: StepResultMessage = {
+          executionId,
+          stepId,
+          success: false,
+          output: {},
+          error,
+        };
+        await producer.send({
+          topic: TOPICS.STEP_RESULT,
+          messages: [{ key: executionId, value: JSON.stringify(result) }],
+        });
+      }
     }
-
-    // Publish result back to orchestrator
-    await producer.send({
-      topic: TOPICS.STEP_RESULT,
-      messages: [
-        {
-          key: executionId,
-          value: JSON.stringify(result),
-        },
-      ],
-    });
-
-    logger.debug('Result published', { executionId, stepId, success: result.success });
   }
 }
