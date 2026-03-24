@@ -1,10 +1,10 @@
 import { createLogger } from '@chronos/shared';
-import { shouldFail, sleep } from './mockUtils';
+import { shouldFail, mockDelay, sleep } from './mockUtils';
 
 const logger = createLogger('orchestrator');
 
 export async function chargeCard(input: Record<string, unknown>): Promise<Record<string, unknown>> {
-  await sleep(150);
+  await mockDelay(150);
 
   if (shouldFail('charge-card')) {
     throw new Error('Card declined - insufficient funds');

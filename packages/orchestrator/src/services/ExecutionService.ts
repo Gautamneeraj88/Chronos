@@ -74,6 +74,24 @@ export class ExecutionService {
       return;
     }
 
+    // Idempotency guard: if this step already has a terminal event (STEP_COMPLETED
+    // or STEP_FAILED), a duplicate result arrived — drop it silently.
+    // This happens after crash recovery: the old Kafka result AND the re-published
+    // step both complete, producing two results for the same step.
+    const existingEvents = await this.eventRepo.findByExecutionId(executionId);
+    const alreadyTerminal = existingEvents.some(
+      (e) =>
+        (e.type === 'STEP_COMPLETED' || e.type === 'STEP_FAILED') &&
+        e.stepName === stepId,
+    );
+    if (alreadyTerminal) {
+      logger.warn('handleStepResult: duplicate result ignored — step already terminal', {
+        executionId,
+        stepId,
+      });
+      return;
+    }
+
     // Append the result event
     if (success) {
       await this.eventRepo.append(

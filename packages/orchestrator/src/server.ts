@@ -62,11 +62,7 @@ async function bootstrap(): Promise<void> {
   );
   await recoveryEngine.recoverInFlightExecutions();
 
-  // 7. Start Kafka result consumer
-  const resultConsumer = new ResultConsumer(kafkaClient, executionService);
-  await resultConsumer.start();
-
-  // 8. Create and start Express app
+  // 7. Create and start Express app — before consumer so health checks pass immediately
   const app = createApp({ workflowService, executionService });
   app.listen(config.port, () => {
     logger.info('Orchestrator running', {
@@ -74,6 +70,10 @@ async function bootstrap(): Promise<void> {
       env: config.nodeEnv,
     });
   });
+
+  // 8. Start Kafka result consumer (non-blocking — consumer group join is async)
+  const resultConsumer = new ResultConsumer(kafkaClient, executionService);
+  await resultConsumer.start();
 }
 
 bootstrap().catch((err) => {

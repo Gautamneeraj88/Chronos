@@ -24,3 +24,12 @@ export function shouldFail(stepName: string): boolean {
 export function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
+
+/**
+ * Delays for MOCK_STEP_DELAY_MS if set, otherwise falls back to defaultMs.
+ * Used by activities so a single env var controls all step timing for testing.
+ */
+export function mockDelay(defaultMs: number): Promise<void> {
+  const override = parseInt(process.env.MOCK_STEP_DELAY_MS ?? '', 10);
+  return sleep(isNaN(override) ? defaultMs : override);
+}

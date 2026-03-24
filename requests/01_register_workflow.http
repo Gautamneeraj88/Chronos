@@ -7,10 +7,8 @@ Content-Type: application/json
 {
   "name": "order-processing",
   "steps": [
-    { "name": "charge-card",       "type": "activity", "activity": "chargeCard",       "retries": 3, "timeoutMs": 5000, "compensation": "refund-card" },
-    { "name": "refund-card",       "type": "activity", "activity": "refundCard",       "retries": 1, "timeoutMs": 5000, "compensation": null },
-    { "name": "update-inventory",  "type": "activity", "activity": "updateInventory",  "retries": 3, "timeoutMs": 5000, "compensation": "restore-inventory" },
-    { "name": "restore-inventory", "type": "activity", "activity": "restoreInventory", "retries": 1, "timeoutMs": 5000, "compensation": null },
-    { "name": "send-confirmation", "type": "activity", "activity": "sendConfirmation", "retries": 2, "timeoutMs": 5000, "compensation": null }
+    { "name": "charge-card",       "type": "activity", "activity": "chargeCard",       "retries": 3, "timeoutMs": 30000, "compensation": "refund-card" },
+    { "name": "update-inventory",  "type": "activity", "activity": "updateInventory",  "retries": 3, "timeoutMs": 30000, "compensation": "restore-inventory" },
+    { "name": "send-confirmation", "type": "activity", "activity": "sendConfirmation", "retries": 2, "timeoutMs": 30000, "compensation": null }
   ]
 }

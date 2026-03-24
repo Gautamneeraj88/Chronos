@@ -1,12 +1,12 @@
 import { createLogger } from '@chronos/shared';
-import { shouldFail, sleep } from './mockUtils';
+import { shouldFail, mockDelay, sleep } from './mockUtils';
 
 const logger = createLogger('orchestrator');
 
 export async function updateInventory(
   input: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
-  await sleep(5000);
+  await mockDelay(5000);
 
   if (shouldFail('update-inventory')) {
     throw new Error('Inventory service unavailable');
