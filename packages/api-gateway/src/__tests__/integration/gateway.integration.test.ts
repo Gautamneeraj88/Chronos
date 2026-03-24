@@ -91,7 +91,7 @@ describe('API Gateway — integration', () => {
         .set('Authorization', `Bearer ${makeToken()}`)
         .send({
           name: 'test-workflow',
-          steps: [{ name: 'step-one', type: 'activity', retries: 3, timeoutMs: 5000, compensation: null }],
+          steps: [{ name: 'step-one', type: 'activity', activity: 'stepOne', retries: 3, timeoutMs: 5000, compensation: null }],
         });
 
       expect(res.status).toBe(201);
@@ -116,7 +116,7 @@ describe('API Gateway — integration', () => {
         .set('Authorization', `Bearer ${makeToken()}`)
         .send({
           name: 'Invalid Name With Spaces!',
-          steps: [{ name: 'step-one', type: 'activity', retries: 3, timeoutMs: 5000, compensation: null }],
+          steps: [{ name: 'step-one', type: 'activity', activity: 'stepOne', retries: 3, timeoutMs: 5000, compensation: null }],
         });
 
       expect(res.status).toBe(400);
@@ -142,7 +142,7 @@ describe('API Gateway — integration', () => {
         .set('Authorization', `Bearer ${makeToken()}`)
         .send({
           name: 'test-workflow',
-          steps: [{ name: 'step-one', type: 'activity', retries: 3, timeoutMs: 5000, compensation: null }],
+          steps: [{ name: 'step-one', type: 'activity', activity: 'stepOne', retries: 3, timeoutMs: 5000, compensation: null }],
         });
 
       expect(res.status).toBe(404);

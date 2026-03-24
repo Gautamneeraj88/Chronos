@@ -7,9 +7,10 @@ import { MongoExecutionRepository } from './repositories/ExecutionRepository';
 import { MongoEventRepository } from './repositories/EventRepository';
 import { RedisLockService } from './locks/RedisLockService';
 import { SagaEngine } from './domain/SagaEngine';
-import { ActivityRunner } from './activities/ActivityRunner';
 import { WorkflowService } from './services/WorkflowService';
 import { ExecutionService } from './services/ExecutionService';
+import { StepPublisher } from './services/StepPublisher';
+import { KafkaClient } from '@chronos/kafka';
 import { RecoveryEngine } from './recovery';
 import { createApp } from './app';
 import { createLogger } from '@chronos/shared';
@@ -30,7 +31,11 @@ async function bootstrap(): Promise<void> {
   // 3. Instantiate domain + infrastructure services
   const lockService = new RedisLockService(redis);
   const sagaEngine = new SagaEngine();
-  const activityRunner = new ActivityRunner();
+  const kafkaClient = KafkaClient.getInstance({
+    clientId: 'chronos-orchestrator',
+    brokers: config.kafkaBrokers.split(','),
+  });
+  const stepPublisher = new StepPublisher(kafkaClient);
 
   // 4. Instantiate application services
   const workflowService = new WorkflowService(workflowRepo);
@@ -40,7 +45,7 @@ async function bootstrap(): Promise<void> {
     workflowRepo,
     lockService,
     sagaEngine,
-    activityRunner,
+    stepPublisher,
   );
 
   // 5. Recovery - MUST complete before acceptiong requests

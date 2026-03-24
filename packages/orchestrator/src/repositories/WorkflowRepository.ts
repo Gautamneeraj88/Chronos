@@ -27,6 +27,7 @@ export class MongoWorkflowRepository implements IWorkflowRepository {
       steps: data.steps.map((step) => ({
         name: step.name,
         type: step.type ?? 'activity',
+        activity: step.activity,
         retries: step.retries ?? DEFAULT_RETRIES,
         timeoutMs: step.timeoutMs ?? DEFAULT_TIMEOUT_MS,
         compensation: step.compensation ?? null,

@@ -8,6 +8,7 @@ const WorkflowStepSchema = new Schema<WorkflowStep>(
   {
     name: { type: String, required: true },
     type: { type: String, enum: ['activity'], default: 'activity' },
+    activity: { type: String, required: true },
     retries: { type: Number, default: 3 },
     timeoutMs: { type: Number, default: 5000 },
     compensation: { type: String, default: null },

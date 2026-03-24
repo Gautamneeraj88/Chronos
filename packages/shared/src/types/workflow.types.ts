@@ -3,6 +3,7 @@
 export interface WorkflowStep {
   name: string;
   type: 'activity';
+  activity: string;
   retries: number;
   timeoutMs: number;
   compensation: string | null;

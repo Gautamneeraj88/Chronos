@@ -14,6 +14,7 @@ const EventSchema = new Schema<DomainEvent>(
         'EXECUTION_COMPLETED',
         'EXECUTION_FAILED',
         'STEP_STARTED',
+        'STEP_IN_FLIGHT',
         'STEP_COMPLETED',
         'STEP_FAILED',
         'COMPENSATION_STARTED',

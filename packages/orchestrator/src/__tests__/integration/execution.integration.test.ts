@@ -112,7 +112,7 @@ describe('GET /internal/executions/:id/events', () => {
       .get(`/internal/executions/${execRes.body.id}/events`);
 
     expect(eventsRes.status).toBe(200);
-    expect(eventsRes.body).toHaveLength(8);
+    expect(eventsRes.body).toHaveLength(11);
     expect(eventsRes.body[0].type).toBe('EXECUTION_STARTED');
     expect(eventsRes.body[eventsRes.body.length - 1].type).toBe('EXECUTION_COMPLETED');
   });

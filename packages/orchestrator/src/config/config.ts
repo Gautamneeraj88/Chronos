@@ -4,6 +4,7 @@ const ConfigSchema = z.object({
   port: z.coerce.number().default(3001),
   mongoUri: z.string().min(1),
   redisUri: z.string().min(1),
+  kafkaBrokers: z.string().default('localhost:9092'),
   nodeEnv: z.enum(['development', 'production', 'test']).default('development'),
   logLevel: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 });
@@ -12,11 +13,12 @@ export type OrchestratorConfig = z.infer<typeof ConfigSchema>;
 
 export function loadConfig(): OrchestratorConfig {
   const result = ConfigSchema.safeParse({
-    port:     process.env.ORCHESTRATOR_PORT,
-    mongoUri: process.env.MONGODB_URI,
-    redisUri: process.env.REDIS_URL,
-    nodeEnv:  process.env.NODE_ENV,
-    logLevel: process.env.LOG_LEVEL,
+    port:         process.env.ORCHESTRATOR_PORT,
+    mongoUri:     process.env.MONGODB_URI,
+    redisUri:     process.env.REDIS_URL,
+    kafkaBrokers: process.env.KAFKA_BROKERS,
+    nodeEnv:      process.env.NODE_ENV,
+    logLevel:     process.env.LOG_LEVEL,
   });
 
    if (!result.success) {
