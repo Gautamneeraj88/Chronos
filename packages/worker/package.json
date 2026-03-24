@@ -8,7 +8,7 @@
     "build": "tsc",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "lint": "eslint src --ext .ts",
-    "test": "echo 'No tests yet' && exit 0"
+    "test": "jest --passWithNoTests"
   },
   "dependencies": {
     "@chronos/kafka": "workspace:*",
