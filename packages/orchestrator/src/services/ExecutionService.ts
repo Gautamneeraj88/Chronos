@@ -74,14 +74,14 @@ export class ExecutionService {
       return;
     }
 
-    // Idempotency guard: if this step already has a terminal event (STEP_COMPLETED
-    // or STEP_FAILED), a duplicate result arrived — drop it silently.
-    // This happens after crash recovery: the old Kafka result AND the re-published
-    // step both complete, producing two results for the same step.
+    // Idempotency guard: if this step already has a terminal event, a duplicate
+    // result arrived (crash recovery re-publish) — drop it silently.
     const existingEvents = await this.eventRepo.findByExecutionId(executionId);
     const alreadyTerminal = existingEvents.some(
       (e) =>
-        (e.type === 'STEP_COMPLETED' || e.type === 'STEP_FAILED') &&
+        (e.type === 'STEP_COMPLETED' ||
+          e.type === 'STEP_FAILED' ||
+          e.type === 'COMPENSATION_COMPLETED') &&
         e.stepName === stepId,
     );
     if (alreadyTerminal) {
@@ -92,12 +92,17 @@ export class ExecutionService {
       return;
     }
 
-    // Append the result event
+    // Append the result event.
+    // Compensation steps complete with COMPENSATION_COMPLETED so the SagaEngine
+    // can track which compensations have run (it ignores STEP_COMPLETED in that path).
+    const isCompensating = execution.status === 'COMPENSATING';
     if (success) {
-      await this.eventRepo.append(
-        this.makeEvent(executionId, 'STEP_COMPLETED', output ?? {}, stepId),
-      );
-      logger.debug('Step completed', { executionId, stepId });
+      const eventType = isCompensating ? 'COMPENSATION_COMPLETED' : 'STEP_COMPLETED';
+      await this.eventRepo.append(this.makeEvent(executionId, eventType, output ?? {}, stepId));
+      logger.debug(isCompensating ? 'Compensation completed' : 'Step completed', {
+        executionId,
+        stepId,
+      });
     } else {
       await this.eventRepo.append(this.makeEvent(executionId, 'STEP_FAILED', { error }, stepId));
       logger.warn('Step failed', { executionId, stepId, error });
@@ -199,17 +204,17 @@ export class ExecutionService {
         );
         await this.eventRepo.append(this.makeEvent(executionId, 'STEP_IN_FLIGHT', {}, stepName));
 
-        const compStep = workflow.steps.find((s) => s.name === stepName);
-        if (compStep) {
-          publishMessage = {
-            executionId,
-            workflowId: execution.workflowId,
-            stepId: stepName,
-            activityName: compStep.activity,
-            input: execution.input,
-            attemptNumber: 1,
-          };
-        }
+        // Compensation steps (e.g. 'refund-card') are not in workflow.steps — they are
+        // referenced only as strings in step.compensation. The ActivityRunner registry
+        // is keyed by step name, so stepName doubles as the activityName here.
+        publishMessage = {
+          executionId,
+          workflowId: execution.workflowId,
+          stepId: stepName,
+          activityName: stepName,
+          input: execution.input,
+          attemptNumber: 1,
+        };
         logger.info('Compensation dispatched to worker', { executionId, step: stepName });
       } else {
         throw new Error(`Unknown saga action: ${JSON.stringify(action)}`);
