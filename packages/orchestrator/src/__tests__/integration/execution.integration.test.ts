@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { Express } from 'express';
-import { buildTestApp, cleanDatabase, teardown, sampleWorkflow } from './helpers';
+import { buildTestApp, cleanDatabase, teardown, sampleWorkflow, TEST_ORG_ID } from './helpers';
 
 // Requires podman containers: podman-compose up -d
 
@@ -18,24 +18,29 @@ afterAll(async () => {
   await teardown();
 });
 
+// Helper: adds X-Org-Id header to every request
+const orgHeader = { 'X-Org-Id': TEST_ORG_ID };
+
 // ── Workflow registration ──────────────────────────────────────────────────
 
 describe('POST /internal/workflows', () => {
   it('registers a workflow and returns 201', async () => {
     const res = await request(app)
       .post('/internal/workflows')
+      .set(orgHeader)
       .send(sampleWorkflow);
 
     expect(res.status).toBe(201);
     expect(res.body.id).toBeDefined();
+    expect(res.body.orgId).toBe(TEST_ORG_ID);
     expect(res.body.name).toBe('test-order-processing');
     expect(res.body.steps).toHaveLength(3);
     expect(res.body.version).toBe(1);
   });
 
   it('returns 409 when workflow name already exists', async () => {
-    await request(app).post('/internal/workflows').send(sampleWorkflow);
-    const res = await request(app).post('/internal/workflows').send(sampleWorkflow);
+    await request(app).post('/internal/workflows').set(orgHeader).send(sampleWorkflow);
+    const res = await request(app).post('/internal/workflows').set(orgHeader).send(sampleWorkflow);
 
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe('CONFLICT');
@@ -44,6 +49,7 @@ describe('POST /internal/workflows', () => {
   it('returns 400 when steps array is empty', async () => {
     const res = await request(app)
       .post('/internal/workflows')
+      .set(orgHeader)
       .send({ name: 'empty-steps', steps: [] });
 
     expect(res.status).toBe(400);
@@ -52,6 +58,7 @@ describe('POST /internal/workflows', () => {
   it('returns 400 when step name has uppercase letters', async () => {
     const res = await request(app)
       .post('/internal/workflows')
+      .set(orgHeader)
       .send({
         name: 'bad-workflow',
         steps: [{ name: 'BadStep', type: 'activity', retries: 3, timeoutMs: 5000, compensation: null }],
@@ -59,21 +66,36 @@ describe('POST /internal/workflows', () => {
 
     expect(res.status).toBe(400);
   });
+
+  it('does not return workflows belonging to a different org', async () => {
+    // Register under TEST_ORG_ID
+    await request(app).post('/internal/workflows').set(orgHeader).send(sampleWorkflow);
+
+    // List under a different org
+    const res = await request(app)
+      .get('/internal/workflows')
+      .set({ 'X-Org-Id': 'other-org' });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(0);
+  });
 });
 
 // ── Execution ──────────────────────────────────────────────────────────────
 
 describe('POST /internal/executions', () => {
   it('runs a workflow to COMPLETED and returns full result', async () => {
-    const wfRes = await request(app).post('/internal/workflows').send(sampleWorkflow);
+    const wfRes = await request(app).post('/internal/workflows').set(orgHeader).send(sampleWorkflow);
     const workflowId = wfRes.body.id;
 
     const execRes = await request(app)
       .post('/internal/executions')
+      .set(orgHeader)
       .send({ workflowId, input: { orderId: 'ord-001' }, userId: 'test-user' });
 
     expect(execRes.status).toBe(201);
     expect(execRes.body.status).toBe('COMPLETED');
+    expect(execRes.body.orgId).toBe(TEST_ORG_ID);
     expect(execRes.body.output['charge-card']).toBeDefined();
     expect(execRes.body.output['update-inventory']).toBeDefined();
     expect(execRes.body.output['send-confirmation']).toBeDefined();
@@ -84,6 +106,7 @@ describe('POST /internal/executions', () => {
   it('returns 404 for unknown workflowId', async () => {
     const res = await request(app)
       .post('/internal/executions')
+      .set(orgHeader)
       .send({ workflowId: 'non-existent-id', input: {}, userId: 'test-user' });
 
     expect(res.status).toBe(404);
@@ -93,6 +116,7 @@ describe('POST /internal/executions', () => {
   it('returns 400 when workflowId is missing', async () => {
     const res = await request(app)
       .post('/internal/executions')
+      .set(orgHeader)
       .send({ input: {} });
 
     expect(res.status).toBe(400);
@@ -103,9 +127,10 @@ describe('POST /internal/executions', () => {
 
 describe('GET /internal/executions/:id/events', () => {
   it('returns events in chronological order', async () => {
-    const wfRes = await request(app).post('/internal/workflows').send(sampleWorkflow);
+    const wfRes = await request(app).post('/internal/workflows').set(orgHeader).send(sampleWorkflow);
     const execRes = await request(app)
       .post('/internal/executions')
+      .set(orgHeader)
       .send({ workflowId: wfRes.body.id, input: {}, userId: 'test-user' });
 
     const eventsRes = await request(app)
@@ -118,9 +143,10 @@ describe('GET /internal/executions/:id/events', () => {
   });
 
   it('each step completes exactly once — no duplicates', async () => {
-    const wfRes = await request(app).post('/internal/workflows').send(sampleWorkflow);
+    const wfRes = await request(app).post('/internal/workflows').set(orgHeader).send(sampleWorkflow);
     const execRes = await request(app)
       .post('/internal/executions')
+      .set(orgHeader)
       .send({ workflowId: wfRes.body.id, input: {}, userId: 'test-user' });
 
     const eventsRes = await request(app)
@@ -145,9 +171,10 @@ describe('Compensation path', () => {
   it('returns FAILED status when MOCK_FAIL_STEPS forces first step to fail', async () => {
     process.env.MOCK_FAIL_STEPS = 'charge-card';
 
-    const wfRes = await request(app).post('/internal/workflows').send(sampleWorkflow);
+    const wfRes = await request(app).post('/internal/workflows').set(orgHeader).send(sampleWorkflow);
     const execRes = await request(app)
       .post('/internal/executions')
+      .set(orgHeader)
       .send({ workflowId: wfRes.body.id, input: {}, userId: 'test-user' });
 
     delete process.env.MOCK_FAIL_STEPS;

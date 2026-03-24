@@ -1,6 +1,7 @@
 import { KafkaClient, TOPICS } from '@chronos/kafka';
 import { StepExecuteMessage, StepResultMessage, DlqMessage, createLogger } from '@chronos/shared';
 import { ActivityRunner } from './activities/ActivityRunner';
+import { stepDuration, stepAttempts } from './metrics/metrics';
 type Producer = Awaited<ReturnType<KafkaClient['getProducer']>>;
 
 const logger = createLogger('worker');
@@ -48,6 +49,7 @@ export class Worker {
           executionId: payload.executionId,
           stepId: payload.stepId,
           activityName: payload.activityName,
+          traceId: payload.traceId,
           partition,
         });
 
@@ -88,11 +90,15 @@ export class Worker {
 
     logger.debug('Executing activity', { executionId, stepId, activityName, attemptNumber });
 
+    const startMs = Date.now();
     try {
       const output = await this.activityRunner.execute(
         { name: stepId, type: 'activity' as const, activity: activityName, retries, timeoutMs: payload.timeoutMs, compensation: null },
         input,
       );
+
+      stepDuration.observe({ activityName, success: 'true' }, Date.now() - startMs);
+      stepAttempts.inc({ activityName, success: 'true' });
 
       const result: StepResultMessage = {
         executionId,
@@ -109,6 +115,8 @@ export class Worker {
       });
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
+      stepDuration.observe({ activityName, success: 'false' }, Date.now() - startMs);
+      stepAttempts.inc({ activityName, success: 'false' });
       logger.warn('Activity failed', { executionId, stepId, attemptNumber, error });
 
       if (attemptNumber <= retries) {

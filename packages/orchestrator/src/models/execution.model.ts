@@ -6,6 +6,7 @@ export type ExecutionDocument = mongoose.HydratedDocument<Execution>;
 const ExecutionSchema = new Schema<Execution>(
   {
     id: { type: String, required: true, unique: true },
+    orgId: { type: String, required: true },
     workflowId: { type: String, required: true },
     workflowVersion: { type: Number, required: true, default: 1 },
     status: {
@@ -37,6 +38,8 @@ const ExecutionSchema = new Schema<Execution>(
 ExecutionSchema.index({ status: 1 });
 // Index for filtering by workflow
 ExecutionSchema.index({ workflowId: 1 });
+// Index for org-scoped queries
+ExecutionSchema.index({ orgId: 1 });
 
 export const ExecutionModel =
   mongoose.models.Execution ?? mongoose.model<Execution>('Execution', ExecutionSchema);

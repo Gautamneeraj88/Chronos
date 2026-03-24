@@ -100,7 +100,10 @@ export async function teardown(): Promise<void> {
   await redisClient.quit();
 }
 
+export const TEST_ORG_ID = 'test-org-001';
+
 export const sampleWorkflow = {
+  orgId: TEST_ORG_ID,
   name: 'test-order-processing',
   steps: [
     { name: 'charge-card',       type: 'activity', activity: 'chargeCard',       retries: 3, timeoutMs: 5000, compensation: 'refund-card' },

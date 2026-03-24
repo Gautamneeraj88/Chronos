@@ -1,3 +1,4 @@
+import './tracing'; // must be first — instruments libraries before they load
 process.env.KAFKAJS_NO_PARTITIONER_WARNING = '1';
 import 'dotenv/config';
 import { loadConfig } from './config/config';

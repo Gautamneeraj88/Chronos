@@ -32,5 +32,7 @@ export const CreateWorkflowSchema = z.object({
     .max(MAX_STEPS, `Workflow cannot have more than ${MAX_STEPS} steps`),
 });
 
-export type CreateWorkflowInput = z.infer<typeof CreateWorkflowSchema>;
+// orgId is injected from the auth context server-side, not provided by the client.
+// We use a separate type so the schema stays clean.
+export type CreateWorkflowInput = z.infer<typeof CreateWorkflowSchema> & { orgId: string };
 export type WorkflowStepInput = z.infer<typeof WorkflowStepSchema>;

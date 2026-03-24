@@ -22,6 +22,7 @@ export class MongoWorkflowRepository implements IWorkflowRepository {
 
     const workflow = await WorkflowModel.create({
       id: uuidv4(),
+      orgId: data.orgId,
       name: data.name,
       version: 1,
       steps: data.steps.map((step) => ({
@@ -37,23 +38,23 @@ export class MongoWorkflowRepository implements IWorkflowRepository {
     return this.toPlain(workflow);
   }
 
-  async findById(id: string): Promise<WorkflowDefinition | null> {
-    const doc = await WorkflowModel.findOne({ id });
+  async findById(id: string, orgId: string): Promise<WorkflowDefinition | null> {
+    const doc = await WorkflowModel.findOne({ id, orgId });
     return doc ? this.toPlain(doc) : null;
   }
 
-  async findByIdAndVersion(id: string, version: number): Promise<WorkflowDefinition | null> {
-    const doc = await WorkflowModel.findOne({ id, version });
+  async findByIdAndVersion(id: string, version: number, orgId: string): Promise<WorkflowDefinition | null> {
+    const doc = await WorkflowModel.findOne({ id, version, orgId });
     return doc ? this.toPlain(doc) : null;
   }
 
-  async findByName(name: string): Promise<WorkflowDefinition | null> {
-    const doc = await WorkflowModel.findOne({ name });
+  async findByName(name: string, orgId: string): Promise<WorkflowDefinition | null> {
+    const doc = await WorkflowModel.findOne({ name, orgId });
     return doc ? this.toPlain(doc) : null;
   }
 
-  async findAll(): Promise<WorkflowDefinition[]> {
-    const docs = await WorkflowModel.find().sort({ createdAt: -1 });
+  async findAll(orgId: string): Promise<WorkflowDefinition[]> {
+    const docs = await WorkflowModel.find({ orgId }).sort({ createdAt: -1 });
     return docs.map(this.toPlain);
   }
 
@@ -63,6 +64,7 @@ export class MongoWorkflowRepository implements IWorkflowRepository {
   private toPlain(doc: WorkflowDocument): WorkflowDefinition {
     return {
       id: doc.id,
+      orgId: doc.orgId,
       name: doc.name,
       version: doc.version,
       steps: doc.steps,

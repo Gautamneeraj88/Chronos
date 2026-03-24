@@ -8,6 +8,7 @@ export interface StepExecuteMessage {
   attemptNumber: number;
   retries: number;
   timeoutMs: number;
+  traceId?: string;
 }
 
 //What the worker publishes to chronos.step.result

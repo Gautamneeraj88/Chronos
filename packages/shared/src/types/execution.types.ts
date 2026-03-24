@@ -8,6 +8,7 @@ export type ExecutionStatus =
 
 export interface Execution {
   id: string;
+  orgId: string;
   workflowId: string;
   workflowVersion: number;
   status: ExecutionStatus;

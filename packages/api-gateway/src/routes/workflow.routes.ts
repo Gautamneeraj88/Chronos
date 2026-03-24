@@ -2,33 +2,34 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { IOrchestratorClient } from '../http';
 import { authMiddleware } from '../middleware';
 import { CreateWorkflowSchema, TriggerExecutionSchema, ValidationError } from '@chronos/shared';
-import { loadConfig } from '../config/config';
 
 export function workflowRouter(orchestrator: IOrchestratorClient): Router {
   const router = Router();
-  const config = loadConfig();
-  const protect = authMiddleware(config.jwtSecret);
+  const protect = authMiddleware(orchestrator);
 
-  // POST /workflows - register a new workflows definition
+  // POST /workflows - register a new workflow definition
   router.post('/', protect, async (req: Request, res: Response, next: NextFunction) => {
     try {
-      // Validdate the request body with Zod
       const parsed = CreateWorkflowSchema.safeParse(req.body);
       if (!parsed.success) {
         throw new ValidationError(parsed.error.issues[0].message);
       }
 
-      const workflow = await orchestrator.createWorkflow(parsed.data);
+      // orgId is sent via X-Org-Id header by the client implementation; inject here for type safety
+      const workflow = await orchestrator.createWorkflow(
+        { ...parsed.data, orgId: req.orgId! },
+        req.orgId!,
+      );
       res.status(201).json(workflow);
     } catch (err) {
-      next(err); // always delegate to errorHandler
+      next(err);
     }
   });
 
   // GET /workflows - list all definitions
-  router.get('/', protect, async (_req: Request, res: Response, next: NextFunction) => {
+  router.get('/', protect, async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const workflows = await orchestrator.listWorkflows();
+      const workflows = await orchestrator.listWorkflows(req.orgId!);
       res.status(200).json(workflows);
     } catch (err) {
       next(err);
@@ -38,7 +39,7 @@ export function workflowRouter(orchestrator: IOrchestratorClient): Router {
   // GET /workflows/:id - get one definition
   router.get('/:id', protect, async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const workflow = await orchestrator.getWorkflow(req.params.id);
+      const workflow = await orchestrator.getWorkflow(req.params.id, req.orgId!);
       res.status(200).json(workflow);
     } catch (err) {
       next(err);
@@ -57,6 +58,7 @@ export function workflowRouter(orchestrator: IOrchestratorClient): Router {
         req.params.id,
         parsed.data.input,
         req.user!.userId,
+        req.orgId!,
       );
       res.status(201).json(execution);
     } catch (err) {

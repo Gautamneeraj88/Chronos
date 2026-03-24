@@ -38,6 +38,7 @@ export class RecoveryEngine {
         const workflow = await this.workflowRepo.findByIdAndVersion(
           execution.workflowId,
           execution.workflowVersion,
+          execution.orgId,
         );
 
         if (!workflow) {

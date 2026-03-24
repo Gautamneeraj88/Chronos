@@ -16,8 +16,15 @@ import { ILockService } from '../locks/ILockService';
 import { SagaEngine } from '../domain/SagaEngine';
 import { StepPublisher } from './StepPublisher';
 import { ITimeoutStore } from '../timeouts';
+import {
+  executionStarted,
+  executionCompleted,
+  activeExecutions,
+} from '../metrics/metrics';
+import { trace, context, SpanStatusCode } from '@opentelemetry/api';
 
 const logger = createLogger('orchestrator');
+const tracer = trace.getTracer('chronos-orchestrator');
 
 export class ExecutionService {
   constructor(
@@ -35,12 +42,14 @@ export class ExecutionService {
     workflowId: string,
     input: Record<string, unknown>,
     userId: string,
+    orgId: string,
   ): Promise<Execution> {
-    const workflow = await this.workflowRepo.findById(workflowId);
+    const workflow = await this.workflowRepo.findById(workflowId, orgId);
     if (!workflow) throw new NotFoundError(`Workflow ${workflowId}`);
 
     const execution = await this.executionRepo.save({
       id: uuidv4(),
+      orgId,
       workflowId,
       workflowVersion: workflow.version,
       status: 'PENDING',
@@ -53,6 +62,8 @@ export class ExecutionService {
       createdBy: userId,
     });
 
+    executionStarted.inc();
+    activeExecutions.inc();
     logger.info('Execution created', { executionId: execution.id, workflowId });
 
     return this.advanceExecution(execution, workflow, []);
@@ -72,11 +83,13 @@ export class ExecutionService {
     const workflow = await this.workflowRepo.findByIdAndVersion(
       execution.workflowId,
       execution.workflowVersion,
+      execution.orgId,
     );
     if (!workflow) {
       logger.error('handleStepResult: workflow not found', {
         workflowId: execution.workflowId,
         workflowVersion: execution.workflowVersion,
+        orgId: execution.orgId,
       });
       return;
     }
@@ -176,6 +189,8 @@ export class ExecutionService {
           completedAt: new Date(),
           output,
         });
+        executionCompleted.inc({ status: 'COMPLETED' });
+        activeExecutions.dec();
         logger.info('Execution completed', { executionId });
       } else if (action.type === 'FAIL') {
         await this.eventRepo.append(
@@ -185,6 +200,8 @@ export class ExecutionService {
           completedAt: new Date(),
           error: action.reason,
         });
+        executionCompleted.inc({ status: 'FAILED' });
+        activeExecutions.dec();
         logger.warn('Execution failed', { executionId, reason: action.reason });
       } else if (action.type === 'EXECUTE_STEP') {
         const { step, stepIndex } = action;
@@ -254,15 +271,32 @@ export class ExecutionService {
     }
 
     if (publishMessage) {
-      await this.stepPublisher.publish(publishMessage);
+      const span = tracer.startSpan('step.dispatch', {
+        attributes: {
+          'execution.id': publishMessage.executionId,
+          'step.id': publishMessage.stepId,
+          'activity.name': publishMessage.activityName,
+          'attempt.number': publishMessage.attemptNumber,
+        },
+      });
+      try {
+        const traceId = span.spanContext().traceId;
+        await this.stepPublisher.publish({ ...publishMessage, traceId });
+        span.setStatus({ code: SpanStatusCode.OK });
+      } catch (err) {
+        span.setStatus({ code: SpanStatusCode.ERROR });
+        throw err;
+      } finally {
+        span.end();
+      }
     }
 
     return (await this.executionRepo.findById(executionId))!;
   }
 
   // ── Public query methods ─────────────────────────────────────────────────
-  async getExecution(id: string): Promise<Execution> {
-    const execution = await this.executionRepo.findById(id);
+  async getExecution(id: string, orgId?: string): Promise<Execution> {
+    const execution = await this.executionRepo.findById(id, orgId);
     if (!execution) throw new NotFoundError(`Execution ${id}`);
     return execution;
   }

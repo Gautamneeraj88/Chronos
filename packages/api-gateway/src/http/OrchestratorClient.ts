@@ -7,7 +7,7 @@ import {
   NotFoundError,
   InternalError,
 } from '@chronos/shared';
-import { IOrchestratorClient } from './IOrchestratorClient';
+import { IOrchestratorClient, ValidatedAuth } from './IOrchestratorClient';
 
 export class OrchestratorClient implements IOrchestratorClient {
   private readonly http: AxiosInstance;
@@ -33,18 +33,33 @@ export class OrchestratorClient implements IOrchestratorClient {
     );
   }
 
-  async createWorkflow(data: CreateWorkflowInput): Promise<WorkflowDefinition> {
-    const { data: res } = await this.http.post('/internal/workflows', data);
+  async validateApiKey(rawKey: string): Promise<ValidatedAuth | null> {
+    try {
+      const { data: res } = await this.http.post('/internal/auth/validate-key', { key: rawKey });
+      return res;
+    } catch {
+      return null;
+    }
+  }
+
+  async createWorkflow(data: CreateWorkflowInput, orgId: string): Promise<WorkflowDefinition> {
+    const { data: res } = await this.http.post('/internal/workflows', data, {
+      headers: { 'X-Org-Id': orgId },
+    });
     return res;
   }
 
-  async listWorkflows(): Promise<WorkflowDefinition[]> {
-    const { data: res } = await this.http.get('/internal/workflows');
+  async listWorkflows(orgId: string): Promise<WorkflowDefinition[]> {
+    const { data: res } = await this.http.get('/internal/workflows', {
+      headers: { 'X-Org-Id': orgId },
+    });
     return res;
   }
 
-  async getWorkflow(id: string): Promise<WorkflowDefinition> {
-    const { data: res } = await this.http.get(`/internal/workflows/${id}`);
+  async getWorkflow(id: string, orgId: string): Promise<WorkflowDefinition> {
+    const { data: res } = await this.http.get(`/internal/workflows/${id}`, {
+      headers: { 'X-Org-Id': orgId },
+    });
     return res;
   }
 
@@ -52,22 +67,27 @@ export class OrchestratorClient implements IOrchestratorClient {
     workflowId: string,
     input: Record<string, unknown>,
     userId: string,
+    orgId: string,
   ): Promise<Execution> {
-    const { data: res } = await this.http.post('/internal/executions', {
-      workflowId,
-      input,
-      userId,
+    const { data: res } = await this.http.post(
+      '/internal/executions',
+      { workflowId, input, userId },
+      { headers: { 'X-Org-Id': orgId } },
+    );
+    return res;
+  }
+
+  async getExecution(id: string, orgId: string): Promise<Execution> {
+    const { data: res } = await this.http.get(`/internal/executions/${id}`, {
+      headers: { 'X-Org-Id': orgId },
     });
     return res;
   }
 
-  async getExecution(id: string): Promise<Execution> {
-    const { data: res } = await this.http.get(`/internal/executions/${id}`);
-    return res;
-  }
-
-  async getExecutionEvents(executionId: string): Promise<DomainEvent[]> {
-    const { data: res } = await this.http.get(`/internal/executions/${executionId}/events`);
+  async getExecutionEvents(executionId: string, orgId: string): Promise<DomainEvent[]> {
+    const { data: res } = await this.http.get(`/internal/executions/${executionId}/events`, {
+      headers: { 'X-Org-Id': orgId },
+    });
     return res;
   }
 }
