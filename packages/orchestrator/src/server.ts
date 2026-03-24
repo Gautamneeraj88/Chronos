@@ -10,10 +10,11 @@ import { SagaEngine } from './domain/SagaEngine';
 import { WorkflowService } from './services/WorkflowService';
 import { ExecutionService } from './services/ExecutionService';
 import { StepPublisher } from './services/StepPublisher';
-import { KafkaClient } from '@chronos/kafka';
+import { ResultConsumer } from './services/ResultConsumer';
 import { RecoveryEngine } from './recovery';
 import { createApp } from './app';
 import { createLogger } from '@chronos/shared';
+import { KafkaClient } from '@chronos/kafka';
 
 async function bootstrap(): Promise<void> {
   const config = loadConfig();
@@ -23,21 +24,23 @@ async function bootstrap(): Promise<void> {
   await connectMongoDB(config.mongoUri);
   const redis = connectRedis(config.redisUri);
 
-  // 2. Instantiate repositories
-  const workflowRepo = new MongoWorkflowRepository();
-  const executionRepo = new MongoExecutionRepository();
-  const eventRepo = new MongoEventRepository();
-
-  // 3. Instantiate domain + infrastructure services
-  const lockService = new RedisLockService(redis);
-  const sagaEngine = new SagaEngine();
+  // 2. Connect to Kafka
   const kafkaClient = KafkaClient.getInstance({
     clientId: 'chronos-orchestrator',
     brokers: config.kafkaBrokers.split(','),
   });
+
+  // 3. Instantiate repositories
+  const workflowRepo = new MongoWorkflowRepository();
+  const executionRepo = new MongoExecutionRepository();
+  const eventRepo = new MongoEventRepository();
+
+  // 4. Instantiate domain + infrastructure services
+  const lockService = new RedisLockService(redis);
+  const sagaEngine = new SagaEngine();
   const stepPublisher = new StepPublisher(kafkaClient);
 
-  // 4. Instantiate application services
+  // 5. Instantiate application services
   const workflowService = new WorkflowService(workflowRepo);
   const executionService = new ExecutionService(
     executionRepo,
@@ -48,7 +51,7 @@ async function bootstrap(): Promise<void> {
     stepPublisher,
   );
 
-  // 5. Recovery - MUST complete before acceptiong requests
+  // 6. Recovery — MUST complete before accepting requests
   const recoveryEngine = new RecoveryEngine(
     executionRepo,
     eventRepo,
@@ -58,9 +61,12 @@ async function bootstrap(): Promise<void> {
   );
   await recoveryEngine.recoverInFlightExecutions();
 
-  // 6. Create and start Express app
-  const app = createApp({ workflowService, executionService });
+  // 7. Start Kafka result consumer
+  const resultConsumer = new ResultConsumer(kafkaClient, executionService);
+  await resultConsumer.start();
 
+  // 8. Create and start Express app
+  const app = createApp({ workflowService, executionService });
   app.listen(config.port, () => {
     logger.info('Orchestrator running', {
       port: config.port,
