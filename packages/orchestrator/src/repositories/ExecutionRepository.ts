@@ -34,6 +34,7 @@ export class MongoExecutionRepository implements IExecutionRepository {
     return {
       id: doc.id,
       workflowId: doc.workflowId,
+      workflowVersion: doc.workflowVersion,
       status: doc.status,
       currentStepIndex: doc.currentStepIndex,
       input: doc.input,

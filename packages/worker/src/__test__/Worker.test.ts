@@ -27,6 +27,7 @@ jest.mock('@chronos/kafka', () => ({
   TOPICS: {
     STEP_EXECUTE: 'chronos.step.execute',
     STEP_RESULT: 'chronos.step.result',
+    STEP_DLQ: 'chronos.step.dlq',
   },
 }));
 
@@ -175,7 +176,7 @@ describe('Worker', () => {
     });
   });
 
-  describe('eachMessage — edge cases', () => {
+  describe('eachMessage — DLQ routing', () => {
     beforeEach(async () => {
       await worker.start();
     });
@@ -190,14 +191,22 @@ describe('Worker', () => {
       expect(mockSend).not.toHaveBeenCalled();
     });
 
-    it('does not publish when message is invalid JSON', async () => {
+    it('sends unparseable message to DLQ instead of dropping', async () => {
       await mockEachMessageHandler({
         message: { value: Buffer.from('not-json') },
         partition: 0,
         topic: TOPICS.STEP_EXECUTE,
       });
 
-      expect(mockSend).not.toHaveBeenCalled();
+      expect(mockSend).toHaveBeenCalledTimes(1);
+      const call = mockSend.mock.calls[0][0];
+      expect(call.topic).toBe(TOPICS.STEP_DLQ);
+
+      const dlq = JSON.parse(call.messages[0].value);
+      expect(dlq.originalTopic).toBe(TOPICS.STEP_EXECUTE);
+      expect(dlq.originalPayload).toBe('not-json');
+      expect(dlq.reason).toBe('JSON parse error');
+      expect(dlq.failedAt).toBeDefined();
     });
   });
 });

@@ -42,6 +42,11 @@ export class MongoWorkflowRepository implements IWorkflowRepository {
     return doc ? this.toPlain(doc) : null;
   }
 
+  async findByIdAndVersion(id: string, version: number): Promise<WorkflowDefinition | null> {
+    const doc = await WorkflowModel.findOne({ id, version });
+    return doc ? this.toPlain(doc) : null;
+  }
+
   async findByName(name: string): Promise<WorkflowDefinition | null> {
     const doc = await WorkflowModel.findOne({ name });
     return doc ? this.toPlain(doc) : null;

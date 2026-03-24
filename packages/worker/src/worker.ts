@@ -1,5 +1,5 @@
 import { KafkaClient, TOPICS } from '@chronos/kafka';
-import { StepExecuteMessage, StepResultMessage, createLogger } from '@chronos/shared';
+import { StepExecuteMessage, StepResultMessage, DlqMessage, createLogger } from '@chronos/shared';
 import { ActivityRunner } from './activities/ActivityRunner';
 type Producer = Awaited<ReturnType<KafkaClient['getProducer']>>;
 
@@ -38,7 +38,8 @@ export class Worker {
         try {
           payload = JSON.parse(raw) as StepExecuteMessage;
         } catch (err) {
-          logger.error('Failed to parse step execute message', { raw, err });
+          logger.error('Failed to parse step execute message — routing to DLQ', { raw, err });
+          await this.sendToDlq(producer, TOPICS.STEP_EXECUTE, raw, 'JSON parse error');
           return;
         }
 
@@ -58,6 +59,25 @@ export class Worker {
       workerId: this.workerId,
       groupId: this.GROUP_ID,
     });
+  }
+
+  private async sendToDlq(
+    producer: Producer,
+    originalTopic: string,
+    originalPayload: string,
+    reason: string,
+  ): Promise<void> {
+    const dlq: DlqMessage = {
+      originalTopic,
+      originalPayload,
+      reason,
+      failedAt: new Date().toISOString(),
+    };
+    await producer.send({
+      topic: TOPICS.STEP_DLQ,
+      messages: [{ value: JSON.stringify(dlq) }],
+    });
+    logger.warn('Message sent to DLQ', { originalTopic, reason });
   }
 
   private async executeAndPublishResult(

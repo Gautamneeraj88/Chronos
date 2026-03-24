@@ -19,11 +19,11 @@ export interface StepResultMessage {
   error?: string;
 }
 
-interface DlqMessage {
+export interface DlqMessage {
   originalTopic: string;
   originalPayload: string; // raw string, unparseable
   reason: string;
-  failedAt: string; // ISO timestamps
+  failedAt: string; // ISO timestamp
   executionId?: string;
   stepId?: string;
 }

@@ -7,6 +7,7 @@ const ExecutionSchema = new Schema<Execution>(
   {
     id: { type: String, required: true, unique: true },
     workflowId: { type: String, required: true },
+    workflowVersion: { type: Number, required: true, default: 1 },
     status: {
       type: String,
       enum: [

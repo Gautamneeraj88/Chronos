@@ -42,6 +42,7 @@ export class ExecutionService {
     const execution = await this.executionRepo.save({
       id: uuidv4(),
       workflowId,
+      workflowVersion: workflow.version,
       status: 'PENDING',
       currentStepIndex: 0,
       input,
@@ -68,10 +69,14 @@ export class ExecutionService {
       return;
     }
 
-    const workflow = await this.workflowRepo.findById(execution.workflowId);
+    const workflow = await this.workflowRepo.findByIdAndVersion(
+      execution.workflowId,
+      execution.workflowVersion,
+    );
     if (!workflow) {
       logger.error('handleStepResult: workflow not found', {
         workflowId: execution.workflowId,
+        workflowVersion: execution.workflowVersion,
       });
       return;
     }

@@ -9,6 +9,7 @@ export type ExecutionStatus =
 export interface Execution {
   id: string;
   workflowId: string;
+  workflowVersion: number;
   status: ExecutionStatus;
   currentStepIndex: number;
   input: Record<string, unknown>;
