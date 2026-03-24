@@ -36,8 +36,8 @@ export class KafkaClient {
     if (!this.consumers.has(groupId)) {
       const consumer = this.kafka.consumer({
         groupId,
-        sessionTimeout: 30000,
-        heartbeatInterval: 3000,
+        sessionTimeout: 6000,
+        heartbeatInterval: 2000,
       });
       await consumer.connect();
       this.consumers.set(groupId, consumer);

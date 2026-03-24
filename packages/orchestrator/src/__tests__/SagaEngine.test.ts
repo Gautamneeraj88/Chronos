@@ -15,6 +15,7 @@ const threeStepWorkflow: WorkflowDefinition = {
     {
       name: 'charge-card',
       type: 'activity',
+      activity: 'chargeCard',
       retries: 3,
       timeoutMs: 5000,
       compensation: 'refund-card',
@@ -22,6 +23,7 @@ const threeStepWorkflow: WorkflowDefinition = {
     {
       name: 'update-inventory',
       type: 'activity',
+      activity: 'updateInventory',
       retries: 3,
       timeoutMs: 5000,
       compensation: 'restore-inventory',
@@ -29,6 +31,7 @@ const threeStepWorkflow: WorkflowDefinition = {
     {
       name: 'send-confirmation',
       type: 'activity',
+      activity: 'sendConfirmation',
       retries: 3,
       timeoutMs: 5000,
       compensation: null,
@@ -44,8 +47,8 @@ const noCompensationWorkflow: WorkflowDefinition = {
   createdAt: new Date(),
   updatedAt: new Date(),
   steps: [
-    { name: 'step-a', type: 'activity', retries: 3, timeoutMs: 5000, compensation: null },
-    { name: 'step-b', type: 'activity', retries: 3, timeoutMs: 5000, compensation: null },
+    { name: 'step-a', type: 'activity', activity: 'stepA', retries: 3, timeoutMs: 5000, compensation: null },
+    { name: 'step-b', type: 'activity', activity: 'stepB', retries: 3, timeoutMs: 5000, compensation: null },
   ],
 };
 
@@ -229,9 +232,9 @@ describe('SagaEngine', () => {
       const workflow: WorkflowDefinition = {
         ...threeStepWorkflow,
         steps: [
-          { name: 'step-a', type: 'activity', retries: 3, timeoutMs: 5000, compensation: null },
-          { name: 'step-b', type: 'activity', retries: 3, timeoutMs: 5000, compensation: 'undo-b' },
-          { name: 'step-c', type: 'activity', retries: 3, timeoutMs: 5000, compensation: null },
+          { name: 'step-a', type: 'activity', activity: 'stepA', retries: 3, timeoutMs: 5000, compensation: null },
+          { name: 'step-b', type: 'activity', activity: 'stepB', retries: 3, timeoutMs: 5000, compensation: 'undo-b' },
+          { name: 'step-c', type: 'activity', activity: 'stepC', retries: 3, timeoutMs: 5000, compensation: null },
         ],
       };
 

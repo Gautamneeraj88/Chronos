@@ -1,14 +1,15 @@
 //TODO: DomainEvent, DomainEventType enum
 
 export type DomainEventType =
-  | "EXECUTION_STARTED"
-  | "EXECUTION_COMPLETED"
-  | "EXECUTION_FAILED"
-  | "STEP_STARTED"
-  | "STEP_COMPLETED"
-  | "STEP_FAILED"
-  | "COMPENSATION_STARTED"
-  | "COMPENSATION_COMPLETED";
+  | 'EXECUTION_STARTED'
+  | 'EXECUTION_COMPLETED'
+  | 'EXECUTION_FAILED'
+  | 'STEP_STARTED'
+  | 'STEP_IN_FLIGHT'
+  | 'STEP_COMPLETED'
+  | 'STEP_FAILED'
+  | 'COMPENSATION_STARTED'
+  | 'COMPENSATION_COMPLETED';
 
 export interface DomainEvent {
   id: string;

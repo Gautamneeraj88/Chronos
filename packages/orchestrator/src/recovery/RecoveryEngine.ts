@@ -15,29 +15,33 @@ export class RecoveryEngine {
   ) {}
 
   async recoverInFlightExecutions(): Promise<void> {
-    //Find every execution that was RUNNING when the server died
-    const running = await this.executionRepo.findByStatus('RUNNING');
+    // Find every execution that was active when the server died
+    // RUNNING = mid forward execution
+    // COMPENSATING = mid rollback
+    const [running, compensating] = await Promise.all([
+      this.executionRepo.findByStatus('RUNNING'),
+      this.executionRepo.findByStatus('COMPENSATING'),
+    ]);
 
-    if (running.length === 0) {
+    const active = [...running, ...compensating];
+
+    if (active.length === 0) {
       logger.info('Recovery: no in-flight executions found');
       return;
     }
 
-    logger.info(`Recovery: found ${running.length} in-flight execution(s) - resuming`);
+    logger.info(`Recovery: found ${active.length} in-flight execution(s) — resuming`);
 
-    for (const execution of running) {
+    for (const execution of active) {
       try {
-        // Load the full event log for this execution
         const events = await this.eventRepo.findByExecutionId(execution.id);
-
-        //Load the workflow definition
         const workflow = await this.workflowRepo.findById(execution.workflowId);
+
         if (!workflow) {
           logger.error('Recovery: workflow not found for execution', {
             executionId: execution.id,
             workflowId: execution.workflowId,
           });
-
           await this.executionRepo.updateStatus(execution.id, 'FAILED', {
             error: 'Workflow definition not found during recovery',
             completedAt: new Date(),
@@ -45,39 +49,45 @@ export class RecoveryEngine {
           continue;
         }
 
+        // Check if the execution was mid-flight when it crashed
+        // STEP_IN_FLIGHT with no following STEP_COMPLETED/STEP_FAILED means
+        // the step was published to Kafka but result never arrived.
+        // We re-publish it — workers are idempotent on executionId + stepId.
+        const lastEvent = events[events.length - 1];
+        const wasInFlight = lastEvent?.type === 'STEP_IN_FLIGHT';
+
         logger.info('Recovery: resuming execution', {
           executionId: execution.id,
           workflowId: execution.workflowId,
+          status: execution.status,
           eventCount: events.length,
-          lastEvent: events[events.length - 1]?.type ?? 'none',
+          lastEvent: lastEvent?.type ?? 'none',
+          wasInFlight,
         });
 
-        // Clear any stale lock left by the crashed process before resuming.
-        // Safe here because we're on startup — no live process can hold this lock.
+        // Clear stale lock — safe at startup, no live process holds it
         await this.lockService.forceRelease(execution.id);
 
-        // Hand off to ExecutionService - it replays events through SagaEngine
-        // and continues from the next incomplete step
+        // advanceExecution replays events through SagaEngine and re-publishes
+        // the in-flight step to Kafka if needed
         await this.executionService.resumeExecution(execution, workflow, events);
 
         logger.info('Recovery: execution resumed successfully', {
           executionId: execution.id,
         });
       } catch (err) {
-        // One failed recovery should not stop others from recovering
         const message = err instanceof Error ? err.message : String(err);
         logger.error('Recovery: failed to resume execution', {
           executionId: execution.id,
           error: message,
         });
-
-        // Mark it failed so it doesn't get stuck in RUNNING forever
         await this.executionRepo.updateStatus(execution.id, 'FAILED', {
           error: `Recovery failed: ${message}`,
           completedAt: new Date(),
         });
       }
     }
+
     logger.info('Recovery: complete');
   }
 }

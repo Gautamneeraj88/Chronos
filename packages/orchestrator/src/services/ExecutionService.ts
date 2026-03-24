@@ -3,219 +3,235 @@ import {
   Execution,
   WorkflowDefinition,
   DomainEvent,
+  StepResultMessage,
+  StepExecuteMessage,
   NotFoundError,
   createLogger,
   LOCK_TTL_MS,
 } from '@chronos/shared';
 import { IExecutionRepository } from '../repositories/IExecutionRepository';
-import { IEventRepository }     from '../repositories/IEventRepository';
-import { IWorkflowRepository }  from '../repositories/IWorkflowRepository';
-import { ILockService }         from '../locks/ILockService';
-import { SagaEngine }           from '../domain/SagaEngine';
-import { ActivityRunner }       from '../activities/ActivityRunner';
+import { IEventRepository } from '../repositories/IEventRepository';
+import { IWorkflowRepository } from '../repositories/IWorkflowRepository';
+import { ILockService } from '../locks/ILockService';
+import { SagaEngine } from '../domain/SagaEngine';
+import { StepPublisher } from './StepPublisher';
 
 const logger = createLogger('orchestrator');
 
 export class ExecutionService {
   constructor(
     private readonly executionRepo: IExecutionRepository,
-    private readonly eventRepo:     IEventRepository,
-    private readonly workflowRepo:  IWorkflowRepository,
-    private readonly lockService:   ILockService,
-    private readonly sagaEngine:    SagaEngine,
-    private readonly activityRunner: ActivityRunner
+    private readonly eventRepo: IEventRepository,
+    private readonly workflowRepo: IWorkflowRepository,
+    private readonly lockService: ILockService,
+    private readonly sagaEngine: SagaEngine,
+    private readonly stepPublisher: StepPublisher,
   ) {}
 
   // ── Trigger a brand new execution ───────────────────────────────────────
-
   async triggerExecution(
     workflowId: string,
     input: Record<string, unknown>,
-    userId: string
+    userId: string,
   ): Promise<Execution> {
-    // 1. Load the workflow definition
     const workflow = await this.workflowRepo.findById(workflowId);
     if (!workflow) throw new NotFoundError(`Workflow ${workflowId}`);
 
-    // 2. Create the execution record in PENDING state
     const execution = await this.executionRepo.save({
-      id:               uuidv4(),
+      id: uuidv4(),
       workflowId,
-      status:           'PENDING',
+      status: 'PENDING',
       currentStepIndex: 0,
       input,
-      output:           {},
-      error:            null,
-      startedAt:        new Date(),
-      completedAt:      null,
-      createdBy:        userId,
+      output: {},
+      error: null,
+      startedAt: new Date(),
+      completedAt: null,
+      createdBy: userId,
     });
 
     logger.info('Execution created', { executionId: execution.id, workflowId });
 
-    // 3. Run the execution and return the final result
-    return this.runExecution(execution, workflow, []);
+    return this.advanceExecution(execution, workflow, []);
   }
 
-  // ── Resume an in-flight execution (used by RecoveryEngine) ─────────────
+  // ── Called by ResultConsumer when a worker finishes a step ──────────────
+  async handleStepResult(message: StepResultMessage): Promise<void> {
+    const { executionId, stepId, success, output, error } = message;
 
+    // Load current execution and workflow
+    const execution = await this.executionRepo.findById(executionId);
+    if (!execution) {
+      logger.error('handleStepResult: execution not found', { executionId });
+      return;
+    }
+
+    const workflow = await this.workflowRepo.findById(execution.workflowId);
+    if (!workflow) {
+      logger.error('handleStepResult: workflow not found', {
+        workflowId: execution.workflowId,
+      });
+      return;
+    }
+
+    // Idempotency guard: if this step already has a terminal event, a duplicate
+    // result arrived (crash recovery re-publish) — drop it silently.
+    const existingEvents = await this.eventRepo.findByExecutionId(executionId);
+    const alreadyTerminal = existingEvents.some(
+      (e) =>
+        (e.type === 'STEP_COMPLETED' ||
+          e.type === 'STEP_FAILED' ||
+          e.type === 'COMPENSATION_COMPLETED') &&
+        e.stepName === stepId,
+    );
+    if (alreadyTerminal) {
+      logger.warn('handleStepResult: duplicate result ignored — step already terminal', {
+        executionId,
+        stepId,
+      });
+      return;
+    }
+
+    // Append the result event.
+    // Compensation steps complete with COMPENSATION_COMPLETED so the SagaEngine
+    // can track which compensations have run (it ignores STEP_COMPLETED in that path).
+    const isCompensating = execution.status === 'COMPENSATING';
+    if (success) {
+      const eventType = isCompensating ? 'COMPENSATION_COMPLETED' : 'STEP_COMPLETED';
+      await this.eventRepo.append(this.makeEvent(executionId, eventType, output ?? {}, stepId));
+      logger.debug(isCompensating ? 'Compensation completed' : 'Step completed', {
+        executionId,
+        stepId,
+      });
+    } else {
+      await this.eventRepo.append(this.makeEvent(executionId, 'STEP_FAILED', { error }, stepId));
+      logger.warn('Step failed', { executionId, stepId, error });
+    }
+
+    // Advance the saga to the next action
+    const events = await this.eventRepo.findByExecutionId(executionId);
+    await this.advanceExecution(execution, workflow, events);
+  }
+
+  // ── Resume an in-flight execution (used by RecoveryEngine) ──────────────
   async resumeExecution(
     execution: Execution,
     workflow: WorkflowDefinition,
-    existingEvents: DomainEvent[]
+    existingEvents: DomainEvent[],
   ): Promise<Execution> {
     logger.info('Resuming execution', { executionId: execution.id });
-    return this.runExecution(execution, workflow, existingEvents);
+    return this.advanceExecution(execution, workflow, existingEvents);
   }
 
-  // ── The core execution loop ─────────────────────────────────────────────
-
-  private async runExecution(
+  // ── Single-tick saga advance ─────────────────────────────────────────────
+  // Determines the next action and either finalizes or publishes to Kafka.
+  // Does NOT loop — each worker result triggers a new tick via handleStepResult.
+  //
+  // IMPORTANT: the lock is released BEFORE publish() is called. This ensures:
+  //   1. handleStepResult() can re-acquire the lock when the result arrives.
+  //   2. The loopback publisher used in tests can call back synchronously.
+  private async advanceExecution(
     execution: Execution,
     workflow: WorkflowDefinition,
-    existingEvents: DomainEvent[]
+    existingEvents: DomainEvent[],
   ): Promise<Execution> {
     const { id: executionId } = execution;
+    let publishMessage: StepExecuteMessage | null = null;
 
-    // Acquire distributed lock — only one process can run this execution
     await this.lockService.acquire(executionId, LOCK_TTL_MS);
 
     try {
-      // Mark as RUNNING
-      await this.executionRepo.updateStatus(executionId, 'RUNNING');
-
-      // Append the started event (if not already there from a previous run)
-      const hasStartedEvent = existingEvents.some(e => e.type === 'EXECUTION_STARTED');
+      // Mark as RUNNING on first tick
+      const hasStartedEvent = existingEvents.some((e) => e.type === 'EXECUTION_STARTED');
       if (!hasStartedEvent) {
+        await this.executionRepo.updateStatus(executionId, 'RUNNING');
         await this.eventRepo.append(this.makeEvent(executionId, 'EXECUTION_STARTED'));
       }
 
-      // Load all events — existing ones plus the one we just appended
-      let events = await this.eventRepo.findByExecutionId(executionId);
-      const output: Record<string, unknown> = {};
+      // Always work from the freshest event log
+      const events = await this.eventRepo.findByExecutionId(executionId);
+      const action = this.sagaEngine.determineNextAction(workflow, events);
 
-      // The saga loop — runs until COMPLETE or FAIL
-      while (true) {
-        const action = this.sagaEngine.determineNextAction(workflow, events);
-
-        if (action.type === 'COMPLETE') {
-          await this.eventRepo.append(
-            this.makeEvent(executionId, 'EXECUTION_COMPLETED')
-          );
-          await this.executionRepo.updateStatus(executionId, 'COMPLETED', {
-            completedAt: new Date(),
-            output,
-          });
-          logger.info('Execution completed', { executionId });
-          return (await this.executionRepo.findById(executionId))!;
-        }
-
-        if (action.type === 'FAIL') {
-          await this.eventRepo.append(
-            this.makeEvent(executionId, 'EXECUTION_FAILED', {
-              reason: action.reason,
-            })
-          );
-          await this.executionRepo.updateStatus(executionId, 'FAILED', {
-            completedAt: new Date(),
-            error: action.reason,
-          });
-          logger.warn('Execution failed', { executionId, reason: action.reason });
-          return (await this.executionRepo.findById(executionId))!;
-        }
-
-        if (action.type === 'EXECUTE_STEP') {
-          const { step, stepIndex } = action;
-
-          await this.eventRepo.append(
-            this.makeEvent(executionId, 'STEP_STARTED', {}, step.name)
-          );
-          await this.executionRepo.updateStatus(executionId, 'RUNNING', {
-            currentStepIndex: stepIndex,
-          });
-
-          try {
-            const result = await this.activityRunner.execute(
-              step,
-              execution.input
-            );
-
-            output[step.name] = result;
-
-            await this.eventRepo.append(
-              this.makeEvent(executionId, 'STEP_COMPLETED', result, step.name)
-            );
-
-            logger.debug('Step completed', { executionId, step: step.name });
-          } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-
-            await this.eventRepo.append(
-              this.makeEvent(executionId, 'STEP_FAILED', { error: message }, step.name)
-            );
-
-            logger.warn('Step failed', { executionId, step: step.name, error: message });
+      if (action.type === 'COMPLETE') {
+        // Aggregate step outputs from STEP_COMPLETED event payloads
+        const output: Record<string, unknown> = {};
+        for (const e of events) {
+          if (e.type === 'STEP_COMPLETED' && e.stepName) {
+            output[e.stepName] = e.payload;
           }
-
-          // Reload events after each step so saga engine sees the latest state
-          events = await this.eventRepo.findByExecutionId(executionId);
-          continue;
         }
+        await this.eventRepo.append(this.makeEvent(executionId, 'EXECUTION_COMPLETED'));
+        await this.executionRepo.updateStatus(executionId, 'COMPLETED', {
+          completedAt: new Date(),
+          output,
+        });
+        logger.info('Execution completed', { executionId });
+      } else if (action.type === 'FAIL') {
+        await this.eventRepo.append(
+          this.makeEvent(executionId, 'EXECUTION_FAILED', { reason: action.reason }),
+        );
+        await this.executionRepo.updateStatus(executionId, 'FAILED', {
+          completedAt: new Date(),
+          error: action.reason,
+        });
+        logger.warn('Execution failed', { executionId, reason: action.reason });
+      } else if (action.type === 'EXECUTE_STEP') {
+        const { step, stepIndex } = action;
 
-        if (action.type === 'RUN_COMPENSATION') {
-          const { stepName, stepIndex } = action;
+        await this.executionRepo.updateStatus(executionId, 'RUNNING', {
+          currentStepIndex: stepIndex,
+        });
+        await this.eventRepo.append(this.makeEvent(executionId, 'STEP_STARTED', {}, step.name));
+        await this.eventRepo.append(this.makeEvent(executionId, 'STEP_IN_FLIGHT', {}, step.name));
 
-          await this.eventRepo.append(
-            this.makeEvent(executionId, 'COMPENSATION_STARTED', {}, stepName)
-          );
-          await this.executionRepo.updateStatus(executionId, 'COMPENSATING', {
-            currentStepIndex: stepIndex,
-          });
+        publishMessage = {
+          executionId,
+          workflowId: execution.workflowId,
+          stepId: step.name,
+          activityName: step.activity,
+          input: execution.input,
+          attemptNumber: 1,
+        };
+        logger.info('Step dispatched to worker', { executionId, step: step.name });
+      } else if (action.type === 'RUN_COMPENSATION') {
+        const { stepName, stepIndex } = action;
 
-          try {
-            // Find the compensation step definition by name
-            const compStep = workflow.steps.find(s => s.name === stepName);
-            if (compStep) {
-              await this.activityRunner.execute(compStep, execution.input);
-            }
+        await this.executionRepo.updateStatus(executionId, 'COMPENSATING', {
+          currentStepIndex: stepIndex,
+        });
+        await this.eventRepo.append(
+          this.makeEvent(executionId, 'COMPENSATION_STARTED', {}, stepName),
+        );
+        await this.eventRepo.append(this.makeEvent(executionId, 'STEP_IN_FLIGHT', {}, stepName));
 
-            await this.eventRepo.append(
-              this.makeEvent(executionId, 'COMPENSATION_COMPLETED', {}, stepName)
-            );
-
-            logger.debug('Compensation completed', { executionId, step: stepName });
-          } catch (err) {
-            // Compensation failed — log it but continue trying other compensations
-            // We don't want a failed compensation to block other rollbacks
-            const message = err instanceof Error ? err.message : String(err);
-            logger.error('Compensation failed', {
-              executionId,
-              step: stepName,
-              error: message,
-            });
-
-            // Still mark it as completed so saga engine moves on
-            await this.eventRepo.append(
-              this.makeEvent(executionId, 'COMPENSATION_COMPLETED', {
-                error: message,
-                failed: true,
-              }, stepName)
-            );
-          }
-
-          events = await this.eventRepo.findByExecutionId(executionId);
-          continue;
-        }
+        // Compensation steps (e.g. 'refund-card') are not in workflow.steps — they are
+        // referenced only as strings in step.compensation. The ActivityRunner registry
+        // is keyed by step name, so stepName doubles as the activityName here.
+        publishMessage = {
+          executionId,
+          workflowId: execution.workflowId,
+          stepId: stepName,
+          activityName: stepName,
+          input: execution.input,
+          attemptNumber: 1,
+        };
+        logger.info('Compensation dispatched to worker', { executionId, step: stepName });
+      } else {
+        throw new Error(`Unknown saga action: ${JSON.stringify(action)}`);
       }
     } finally {
-      // Always release the lock — even if an exception was thrown
-      // The finally block guarantees this runs no matter what
+      // Always release before publishing so handleStepResult can re-acquire
       await this.lockService.release(executionId);
     }
+
+    if (publishMessage) {
+      await this.stepPublisher.publish(publishMessage);
+    }
+
+    return (await this.executionRepo.findById(executionId))!;
   }
 
-  // ── Public query methods ────────────────────────────────────────────────
-
+  // ── Public query methods ─────────────────────────────────────────────────
   async getExecution(id: string): Promise<Execution> {
     const execution = await this.executionRepo.findById(id);
     if (!execution) throw new NotFoundError(`Execution ${id}`);
@@ -226,21 +242,20 @@ export class ExecutionService {
     return this.eventRepo.findByExecutionId(executionId);
   }
 
-  // ── Helper: create a domain event ──────────────────────────────────────
-
+  // ── Helper: create a domain event ───────────────────────────────────────
   private makeEvent(
     executionId: string,
     type: DomainEvent['type'],
     payload: Record<string, unknown> = {},
-    stepName: string | null = null
+    stepName: string | null = null,
   ): DomainEvent {
     return {
-      id:          uuidv4(),
+      id: uuidv4(),
       executionId,
       type,
       stepName,
       payload,
-      occurredAt:  new Date(),
+      occurredAt: new Date(),
     };
   }
 }
