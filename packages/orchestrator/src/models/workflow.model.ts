@@ -21,6 +21,7 @@ const WorkflowStepSchema = new Schema<WorkflowStep>(
 const WorkflowSchema = new Schema<WorkflowDefinition>(
   {
     id: { type: String, required: true, unique: true },
+    orgId: { type: String, required: true },
     name: { type: String, required: true, unique: true },
     version: { type: Number, default: 1 },
     steps: { type: [WorkflowStepSchema], required: true },
@@ -30,6 +31,8 @@ const WorkflowSchema = new Schema<WorkflowDefinition>(
     versionKey: false,
   },
 );
+
+WorkflowSchema.index({ orgId: 1 });
 
 // INFO: Prevent model re-registration error when tests hot-reload
 export const WorkflowModel =

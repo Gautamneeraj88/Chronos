@@ -1,5 +1,3 @@
-//TODO: WorkflowDefinition, WorkflowStep
-
 export interface WorkflowStep {
   name: string;
   type: 'activity';
@@ -11,6 +9,7 @@ export interface WorkflowStep {
 
 export interface WorkflowDefinition {
   id: string;
+  orgId: string;
   name: string;
   version: number;
   steps: WorkflowStep[];

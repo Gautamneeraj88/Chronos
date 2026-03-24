@@ -1,7 +1,4 @@
-// TODO Week 2 — add workflow route tests
-// Covered properly in Week 7 integration tests
-// Placeholder keeps Jest happy
-
+// Covered by packages/api-gateway/src/__tests__/integration/gateway.integration.test.ts
 describe('workflow routes', () => {
   it.todo('POST /workflows returns 201 with valid body and JWT');
   it.todo('POST /workflows returns 400 with invalid body');

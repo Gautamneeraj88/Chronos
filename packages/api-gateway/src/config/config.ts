@@ -3,8 +3,8 @@ import { createLogger } from '@chronos/shared';
 
 const ConfigSchema = z.object({
   port: z.coerce.number().default(3000),
-  jwtSecret: z.string().min(16, 'JWT_SECRET must be at least 16 characters'),
   orchestratorUrl: z.string().url(),
+  redisUrl: z.string().default('redis://localhost:6379'),
   nodeEnv: z.enum(['development', 'production', 'test']).default('development'),
   logLevel: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   rateLimitWindowMs: z.coerce.number().default(60_000),
@@ -16,8 +16,8 @@ export type GatewayConfig = z.infer<typeof ConfigSchema>;
 export function loadConfig(): GatewayConfig {
   const result = ConfigSchema.safeParse({
     port: process.env.GATEWAY_PORT,
-    jwtSecret: process.env.JWT_SECRET,
     orchestratorUrl: process.env.ORCHESTRATOR_URL,
+    redisUrl: process.env.REDIS_URL,
     nodeEnv: process.env.NODE_ENV,
     logLevel: process.env.LOG_LEVEL,
     rateLimitWindowMs: process.env.RATE_LIMIT_WINDOW_MS,

@@ -1,3 +1,4 @@
+import './tracing'; // must be first — instruments libraries before they load
 process.env.KAFKAJS_NO_PARTITIONER_WARNING = '1';
 import 'dotenv/config';
 import express from 'express';
@@ -5,6 +6,7 @@ import { loadConfig } from './config/config';
 import { KafkaClient } from '@chronos/kafka';
 import { Worker } from './worker';
 import { createLogger } from '@chronos/shared';
+import { register } from './metrics/metrics';
 
 async function bootstrap(): Promise<void> {
   const config = loadConfig();
@@ -28,6 +30,11 @@ async function bootstrap(): Promise<void> {
       service: 'worker',
       workerId: config.workerId,
     });
+  });
+
+  app.get('/metrics', async (_req, res) => {
+    res.set('Content-Type', register.contentType);
+    res.end(await register.metrics());
   });
 
   app.listen(config.port, () => {

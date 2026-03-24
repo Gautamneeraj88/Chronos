@@ -17,13 +17,13 @@ export class WorkflowService {
     return workflow;
   }
 
-  async getById(id: string): Promise<WorkflowDefinition> {
-    const workflow = await this.workflowRepo.findById(id);
+  async getById(id: string, orgId: string): Promise<WorkflowDefinition> {
+    const workflow = await this.workflowRepo.findById(id, orgId);
     if (!workflow) throw new NotFoundError(`Workflow ${id}`);
     return workflow;
   }
 
-  async listAll(): Promise<WorkflowDefinition[]> {
-    return this.workflowRepo.findAll();
+  async listAll(orgId: string): Promise<WorkflowDefinition[]> {
+    return this.workflowRepo.findAll(orgId);
   }
 }

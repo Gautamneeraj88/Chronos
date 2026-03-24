@@ -1,41 +1,47 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
 import { UnauthorizedError } from '@chronos/shared';
+import { IOrchestratorClient } from '../http/IOrchestratorClient';
 
 export interface AuthUser {
   userId: string;
-  email: string;
+  orgId: string;
 }
 
-//NOTE: Extend Request type to include authenticated user
 declare global {
   namespace Express {
     interface Request {
       user?: AuthUser;
+      orgId?: string;
     }
   }
 }
 
-/* NOTE:
- * Returns a middleware function - takes jwtSecret as parameter
- * This means you can test it by passing a known secret
+/**
+ * Returns a middleware that validates an API key by calling the orchestrator.
+ * On success, sets req.user = { userId, orgId } and req.orgId = orgId.
+ *
+ * The orchestratorClient dependency is injected so tests can pass a mock.
  */
-export function authMiddleware(jwtSecret: string) {
-  return function (req: Request, _res: Response, next: NextFunction): void {
+export function authMiddleware(orchestratorClient: IOrchestratorClient) {
+  return async function (req: Request, _res: Response, next: NextFunction): Promise<void> {
     const authHeader = req.headers.authorization;
 
     if (!authHeader?.startsWith('Bearer ')) {
       return next(new UnauthorizedError('Missing Bearer token'));
     }
 
-    const token = authHeader.slice(7); //remove "Bearer "
+    const rawKey = authHeader.slice(7);
 
     try {
-      const payload = jwt.verify(token, jwtSecret) as AuthUser;
-      req.user = { userId: payload.userId, email: payload.email };
+      const result = await orchestratorClient.validateApiKey(rawKey);
+      if (!result) {
+        return next(new UnauthorizedError('Invalid or revoked API key'));
+      }
+      req.user = { userId: result.userId, orgId: result.orgId };
+      req.orgId = result.orgId;
       next();
     } catch {
-      next(new UnauthorizedError('Invalid or expired token'));
+      next(new UnauthorizedError('Auth service unavailable'));
     }
   };
 }

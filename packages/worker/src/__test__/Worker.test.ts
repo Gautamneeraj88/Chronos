@@ -27,6 +27,7 @@ jest.mock('@chronos/kafka', () => ({
   TOPICS: {
     STEP_EXECUTE: 'chronos.step.execute',
     STEP_RESULT: 'chronos.step.result',
+    STEP_DLQ: 'chronos.step.dlq',
   },
 }));
 
@@ -48,6 +49,8 @@ function makePayload(overrides: Partial<StepExecuteMessage> = {}): StepExecuteMe
     activityName: 'chargeCard',
     input: { orderId: 'ord-001', amount: 99.99 },
     attemptNumber: 1,
+    retries: 3,
+    timeoutMs: 30_000,
     ...overrides,
   };
 }
@@ -111,40 +114,106 @@ describe('Worker', () => {
       const call = mockSend.mock.calls[0][0];
       expect(call.messages[0].key).toBe('exec-123');
     });
+
+    it('publishes success when activity succeeds on attempt 2 (after retry)', async () => {
+      // Simulates: worker receives a step with attemptNumber=2 (re-published by a prior failed attempt)
+      const payload = makePayload({ stepId: 'charge-card', activityName: 'chargeCard', attemptNumber: 2, retries: 3 });
+
+      await mockEachMessageHandler(makeMessage(payload));
+
+      const call = mockSend.mock.calls[0][0];
+      expect(call.topic).toBe(TOPICS.STEP_RESULT);
+      const result = JSON.parse(call.messages[0].value);
+      expect(result.success).toBe(true);
+      expect(result.stepId).toBe('charge-card');
+    });
   });
 
-  describe('eachMessage — failure path', () => {
+  describe('eachMessage — failure + retry path', () => {
     beforeEach(async () => {
+      jest.useFakeTimers();
       await worker.start();
     });
 
-    it('publishes failure result when activity throws', async () => {
-      // Use an unregistered activity name to force a failure
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('re-publishes to STEP_EXECUTE with attemptNumber+1 when retries remain', async () => {
       const payload = makePayload({
         activityName: 'nonExistentActivity',
-        stepId: 'bad-step',
+        stepId: 'bad-step',  // not in registry → throws immediately, no withTimeout delay
+        attemptNumber: 1,
+        retries: 3,
+      });
+
+      const handlerPromise = mockEachMessageHandler(makeMessage(payload));
+      // runAllTimersAsync interleaves timer advancement with promise resolution,
+      // so it fires the retry setTimeout even though it's registered after an await.
+      await jest.runAllTimersAsync();
+      await handlerPromise;
+
+      expect(mockSend).toHaveBeenCalledTimes(1);
+      const call = mockSend.mock.calls[0][0];
+      expect(call.topic).toBe(TOPICS.STEP_EXECUTE);
+
+      const retried = JSON.parse(call.messages[0].value);
+      expect(retried.attemptNumber).toBe(2);
+      expect(retried.stepId).toBe('bad-step');
+    });
+
+    it('publishes failure to STEP_RESULT when all retries exhausted', async () => {
+      const payload = makePayload({
+        activityName: 'nonExistentActivity',
+        stepId: 'bad-step',  // not in registry → immediate throw, no timer needed
+        attemptNumber: 4,
+        retries: 3,
       });
 
       await mockEachMessageHandler(makeMessage(payload));
 
       expect(mockSend).toHaveBeenCalledTimes(1);
       const call = mockSend.mock.calls[0][0];
-      const result = JSON.parse(call.messages[0].value);
+      expect(call.topic).toBe(TOPICS.STEP_RESULT);
 
+      const result = JSON.parse(call.messages[0].value);
       expect(result.success).toBe(false);
       expect(result.error).toBeDefined();
-      expect(typeof result.error).toBe('string');
     });
 
     it('does not throw when activity fails — consumer must stay alive', async () => {
-      const payload = makePayload({ activityName: 'nonExistentActivity' });
+      // stepId 'bad-step' is not in the registry → immediate ActivityError, no timer
+      const payload = makePayload({ activityName: 'nonExistentActivity', stepId: 'bad-step', retries: 0 });
 
-      // Should not throw — a crash here would kill the consumer
       await expect(mockEachMessageHandler(makeMessage(payload))).resolves.not.toThrow();
+    });
+
+    it('backoff delay doubles: 1000ms on attempt 1, 2000ms on attempt 2', async () => {
+      // Attempt 1 → delay = min(1000 * 2^0, 30000) = 1000ms
+      const p1 = mockEachMessageHandler(makeMessage(
+        makePayload({ stepId: 'bad-step', activityName: 'nonExistentActivity', attemptNumber: 1, retries: 3 }),
+      ));
+      await jest.advanceTimersByTimeAsync(999);
+      expect(mockSend).not.toHaveBeenCalled();   // retry not fired yet
+      await jest.advanceTimersByTimeAsync(1);
+      await p1;
+      expect(mockSend).toHaveBeenCalledTimes(1); // fired at exactly 1000ms
+
+      jest.clearAllMocks();
+
+      // Attempt 2 → delay = min(1000 * 2^1, 30000) = 2000ms
+      const p2 = mockEachMessageHandler(makeMessage(
+        makePayload({ stepId: 'bad-step', activityName: 'nonExistentActivity', attemptNumber: 2, retries: 3 }),
+      ));
+      await jest.advanceTimersByTimeAsync(1999);
+      expect(mockSend).not.toHaveBeenCalled();   // retry not fired yet
+      await jest.advanceTimersByTimeAsync(1);
+      await p2;
+      expect(mockSend).toHaveBeenCalledTimes(1); // fired at exactly 2000ms
     });
   });
 
-  describe('eachMessage — edge cases', () => {
+  describe('eachMessage — DLQ routing', () => {
     beforeEach(async () => {
       await worker.start();
     });
@@ -159,14 +228,22 @@ describe('Worker', () => {
       expect(mockSend).not.toHaveBeenCalled();
     });
 
-    it('does not publish when message is invalid JSON', async () => {
+    it('sends unparseable message to DLQ instead of dropping', async () => {
       await mockEachMessageHandler({
         message: { value: Buffer.from('not-json') },
         partition: 0,
         topic: TOPICS.STEP_EXECUTE,
       });
 
-      expect(mockSend).not.toHaveBeenCalled();
+      expect(mockSend).toHaveBeenCalledTimes(1);
+      const call = mockSend.mock.calls[0][0];
+      expect(call.topic).toBe(TOPICS.STEP_DLQ);
+
+      const dlq = JSON.parse(call.messages[0].value);
+      expect(dlq.originalTopic).toBe(TOPICS.STEP_EXECUTE);
+      expect(dlq.originalPayload).toBe('not-json');
+      expect(dlq.reason).toBe('JSON parse error');
+      expect(dlq.failedAt).toBeDefined();
     });
   });
 });

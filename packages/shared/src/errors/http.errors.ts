@@ -1,5 +1,3 @@
-//TODO: NotFoundError, ValidationError, etc.
-
 import { ChronosError } from "./base.error";
 
 export class ValidationError extends ChronosError {

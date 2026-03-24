@@ -1,8 +1,10 @@
-import { KafkaClient, TOPICS } from "@chronos/kafka";
-import { StepResultMessage, createLogger } from "@chronos/shared";
-import { ExecutionService } from "./ExecutionService";
+import { KafkaClient, TOPICS } from '@chronos/kafka';
+import { StepResultMessage, DlqMessage, createLogger } from '@chronos/shared';
+import { ExecutionService } from './ExecutionService';
 
 const logger = createLogger('orchestrator');
+
+type Producer = Awaited<ReturnType<KafkaClient['getProducer']>>;
 
 export class ResultConsumer {
   private client: KafkaClient;
@@ -16,6 +18,7 @@ export class ResultConsumer {
 
   async start(): Promise<void> {
     const consumer = await this.client.getConsumer(this.GROUP_ID);
+    const producer = await this.client.getProducer();
 
     await consumer.subscribe({
       topic: TOPICS.STEP_RESULT,
@@ -23,10 +26,10 @@ export class ResultConsumer {
     });
 
     await consumer.run({
-      eachMessage: async ({ message, partition, topic}) => {
-        const raw = message.value?.toString();
-        if(!raw) {
-          logger.warn('Received empty message', { topic, partition});
+      eachMessage: async ({ message, partition, topic }) => {
+        const raw = message.value?.toString() ?? '';
+        if (!raw) {
+          logger.warn('Received empty message', { topic, partition });
           return;
         }
 
@@ -34,7 +37,8 @@ export class ResultConsumer {
         try {
           parsed = JSON.parse(raw) as StepResultMessage;
         } catch (err) {
-          logger.error('Failed to parse step result message', { raw, err });
+          logger.error('Failed to parse step result message — routing to DLQ', { raw, err });
+          await this.sendToDlq(producer, topic, raw, 'JSON parse error');
           return;
         }
 
@@ -47,8 +51,6 @@ export class ResultConsumer {
         try {
           await this.executionService.handleStepResult(parsed);
         } catch (err) {
-          // Log but don't rethrow - a crash here would stop the consumer
-          // In Week 11 we'll add a dead letter queue for failed results
           logger.error('Failed to handle step result', {
             executionId: parsed.executionId,
             stepId: parsed.stepId,
@@ -59,5 +61,28 @@ export class ResultConsumer {
     });
 
     logger.info('ResultConsumer started', { groupId: this.GROUP_ID });
+  }
+
+  private async sendToDlq(
+    producer: Producer,
+    originalTopic: string,
+    originalPayload: string,
+    reason: string,
+    executionId?: string,
+    stepId?: string,
+  ): Promise<void> {
+    const dlq: DlqMessage = {
+      originalTopic,
+      originalPayload,
+      reason,
+      failedAt: new Date().toISOString(),
+      executionId,
+      stepId,
+    };
+    await producer.send({
+      topic: TOPICS.STEP_DLQ,
+      messages: [{ value: JSON.stringify(dlq) }],
+    });
+    logger.warn('Message sent to DLQ', { originalTopic, reason, executionId, stepId });
   }
 }

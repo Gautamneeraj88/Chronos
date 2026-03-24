@@ -8,8 +8,9 @@ export class MongoExecutionRepository implements IExecutionRepository {
     return this.toPlain(doc);
   }
 
-  async findById(id: string): Promise<Execution | null> {
-    const doc = await ExecutionModel.findOne({ id });
+  async findById(id: string, orgId?: string): Promise<Execution | null> {
+    const query = orgId ? { id, orgId } : { id };
+    const doc = await ExecutionModel.findOne(query);
     return doc ? this.toPlain(doc) : null;
   }
 
@@ -33,7 +34,9 @@ export class MongoExecutionRepository implements IExecutionRepository {
   private toPlain(doc: ExecutionDocument): Execution {
     return {
       id: doc.id,
+      orgId: doc.orgId,
       workflowId: doc.workflowId,
+      workflowVersion: doc.workflowVersion,
       status: doc.status,
       currentStepIndex: doc.currentStepIndex,
       input: doc.input,

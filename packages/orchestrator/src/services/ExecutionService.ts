@@ -15,8 +15,16 @@ import { IWorkflowRepository } from '../repositories/IWorkflowRepository';
 import { ILockService } from '../locks/ILockService';
 import { SagaEngine } from '../domain/SagaEngine';
 import { StepPublisher } from './StepPublisher';
+import { ITimeoutStore } from '../timeouts';
+import {
+  executionStarted,
+  executionCompleted,
+  activeExecutions,
+} from '../metrics/metrics';
+import { trace, context, SpanStatusCode } from '@opentelemetry/api';
 
 const logger = createLogger('orchestrator');
+const tracer = trace.getTracer('chronos-orchestrator');
 
 export class ExecutionService {
   constructor(
@@ -26,6 +34,7 @@ export class ExecutionService {
     private readonly lockService: ILockService,
     private readonly sagaEngine: SagaEngine,
     private readonly stepPublisher: StepPublisher,
+    private readonly timeoutStore: ITimeoutStore,
   ) {}
 
   // ── Trigger a brand new execution ───────────────────────────────────────
@@ -33,13 +42,16 @@ export class ExecutionService {
     workflowId: string,
     input: Record<string, unknown>,
     userId: string,
+    orgId: string,
   ): Promise<Execution> {
-    const workflow = await this.workflowRepo.findById(workflowId);
+    const workflow = await this.workflowRepo.findById(workflowId, orgId);
     if (!workflow) throw new NotFoundError(`Workflow ${workflowId}`);
 
     const execution = await this.executionRepo.save({
       id: uuidv4(),
+      orgId,
       workflowId,
+      workflowVersion: workflow.version,
       status: 'PENDING',
       currentStepIndex: 0,
       input,
@@ -50,6 +62,8 @@ export class ExecutionService {
       createdBy: userId,
     });
 
+    executionStarted.inc();
+    activeExecutions.inc();
     logger.info('Execution created', { executionId: execution.id, workflowId });
 
     return this.advanceExecution(execution, workflow, []);
@@ -66,10 +80,16 @@ export class ExecutionService {
       return;
     }
 
-    const workflow = await this.workflowRepo.findById(execution.workflowId);
+    const workflow = await this.workflowRepo.findByIdAndVersion(
+      execution.workflowId,
+      execution.workflowVersion,
+      execution.orgId,
+    );
     if (!workflow) {
       logger.error('handleStepResult: workflow not found', {
         workflowId: execution.workflowId,
+        workflowVersion: execution.workflowVersion,
+        orgId: execution.orgId,
       });
       return;
     }
@@ -91,6 +111,9 @@ export class ExecutionService {
       });
       return;
     }
+
+    // Step has reached a terminal state — cancel its pending timeout
+    await this.timeoutStore.cancel(executionId, stepId);
 
     // Append the result event.
     // Compensation steps complete with COMPENSATION_COMPLETED so the SagaEngine
@@ -137,6 +160,7 @@ export class ExecutionService {
   ): Promise<Execution> {
     const { id: executionId } = execution;
     let publishMessage: StepExecuteMessage | null = null;
+    let timeoutSchedule: { stepId: string; expiresAt: number } | null = null;
 
     await this.lockService.acquire(executionId, LOCK_TTL_MS);
 
@@ -165,6 +189,8 @@ export class ExecutionService {
           completedAt: new Date(),
           output,
         });
+        executionCompleted.inc({ status: 'COMPLETED' });
+        activeExecutions.dec();
         logger.info('Execution completed', { executionId });
       } else if (action.type === 'FAIL') {
         await this.eventRepo.append(
@@ -174,6 +200,8 @@ export class ExecutionService {
           completedAt: new Date(),
           error: action.reason,
         });
+        executionCompleted.inc({ status: 'FAILED' });
+        activeExecutions.dec();
         logger.warn('Execution failed', { executionId, reason: action.reason });
       } else if (action.type === 'EXECUTE_STEP') {
         const { step, stepIndex } = action;
@@ -191,7 +219,11 @@ export class ExecutionService {
           activityName: step.activity,
           input: execution.input,
           attemptNumber: 1,
+          retries: step.retries,
+          timeoutMs: step.timeoutMs,
         };
+        // Cancel any stale timeout (e.g. from a previous crash), then schedule fresh
+        timeoutSchedule = { stepId: step.name, expiresAt: Date.now() + step.timeoutMs };
         logger.info('Step dispatched to worker', { executionId, step: step.name });
       } else if (action.type === 'RUN_COMPENSATION') {
         const { stepName, stepIndex } = action;
@@ -204,6 +236,11 @@ export class ExecutionService {
         );
         await this.eventRepo.append(this.makeEvent(executionId, 'STEP_IN_FLIGHT', {}, stepName));
 
+        // Find the parent step to inherit retries/timeoutMs; fall back to safe defaults
+        const parentStep = workflow.steps.find((s) => s.compensation === stepName);
+        const retries = parentStep?.retries ?? 0;
+        const timeoutMs = parentStep?.timeoutMs ?? 30_000;
+
         // Compensation steps (e.g. 'refund-card') are not in workflow.steps — they are
         // referenced only as strings in step.compensation. The ActivityRunner registry
         // is keyed by step name, so stepName doubles as the activityName here.
@@ -214,7 +251,10 @@ export class ExecutionService {
           activityName: stepName,
           input: execution.input,
           attemptNumber: 1,
+          retries,
+          timeoutMs,
         };
+        timeoutSchedule = { stepId: stepName, expiresAt: Date.now() + timeoutMs };
         logger.info('Compensation dispatched to worker', { executionId, step: stepName });
       } else {
         throw new Error(`Unknown saga action: ${JSON.stringify(action)}`);
@@ -224,16 +264,39 @@ export class ExecutionService {
       await this.lockService.release(executionId);
     }
 
+    if (timeoutSchedule) {
+      // Cancel first to overwrite any stale entry from a previous crash
+      await this.timeoutStore.cancel(executionId, timeoutSchedule.stepId);
+      await this.timeoutStore.schedule(executionId, timeoutSchedule.stepId, timeoutSchedule.expiresAt);
+    }
+
     if (publishMessage) {
-      await this.stepPublisher.publish(publishMessage);
+      const span = tracer.startSpan('step.dispatch', {
+        attributes: {
+          'execution.id': publishMessage.executionId,
+          'step.id': publishMessage.stepId,
+          'activity.name': publishMessage.activityName,
+          'attempt.number': publishMessage.attemptNumber,
+        },
+      });
+      try {
+        const traceId = span.spanContext().traceId;
+        await this.stepPublisher.publish({ ...publishMessage, traceId });
+        span.setStatus({ code: SpanStatusCode.OK });
+      } catch (err) {
+        span.setStatus({ code: SpanStatusCode.ERROR });
+        throw err;
+      } finally {
+        span.end();
+      }
     }
 
     return (await this.executionRepo.findById(executionId))!;
   }
 
   // ── Public query methods ─────────────────────────────────────────────────
-  async getExecution(id: string): Promise<Execution> {
-    const execution = await this.executionRepo.findById(id);
+  async getExecution(id: string, orgId?: string): Promise<Execution> {
+    const execution = await this.executionRepo.findById(id, orgId);
     if (!execution) throw new NotFoundError(`Execution ${id}`);
     return execution;
   }

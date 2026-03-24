@@ -1,10 +1,11 @@
 import request from 'supertest';
 import { createApp } from '../app';
 import { loadConfig } from '../config/config';
-import { IOrchestratorClient } from '../http';
+import { IOrchestratorClient, ValidatedAuth } from '../http/IOrchestratorClient';
 
-// Fake orchestrator client - implements the interface, does nothing real
+// Fake orchestrator client — validateApiKey controls auth outcomes
 const fakeOrchestrator: IOrchestratorClient = {
+  validateApiKey: jest.fn(),
   createWorkflow: jest.fn(),
   listWorkflows: jest.fn(),
   getWorkflow: jest.fn(),
@@ -24,18 +25,40 @@ describe('GET /health', () => {
   });
 });
 
-describe('auth middleware', () => {
+describe('auth middleware — API key flow', () => {
+  beforeEach(() => jest.clearAllMocks());
+
   it('returns 401 when no Authorization header', async () => {
     const res = await request(app).post('/workflows').send({ name: 'test' });
     expect(res.status).toBe(401);
     expect(res.body.error.code).toBe('UNAUTHORIZED');
   });
 
-  it('returns 401 when token is invalid', async () => {
+  it('returns 401 when API key is invalid', async () => {
+    (fakeOrchestrator.validateApiKey as jest.Mock).mockResolvedValue(null);
+
     const res = await request(app)
       .post('/workflows')
-      .set('Authorization', 'Bearer not-a-real-token')
+      .set('Authorization', 'Bearer bad-key')
       .send({ name: 'test' });
+
     expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe('UNAUTHORIZED');
+  });
+
+  it('calls next() and sets req.orgId when API key is valid', async () => {
+    const auth: ValidatedAuth = { orgId: 'org-abc', userId: 'user-1' };
+    (fakeOrchestrator.validateApiKey as jest.Mock).mockResolvedValue(auth);
+    // createWorkflow will 400 due to missing body, but auth must have passed
+    (fakeOrchestrator.createWorkflow as jest.Mock).mockResolvedValue({});
+
+    const res = await request(app)
+      .post('/workflows')
+      .set('Authorization', 'Bearer valid-key')
+      .send({ name: 'test-wf', steps: [] }); // will fail Zod validation, but auth passed
+
+    // 400 = validation failure (auth passed), not 401
+    expect(res.status).not.toBe(401);
+    expect(fakeOrchestrator.validateApiKey).toHaveBeenCalledWith('valid-key');
   });
 });

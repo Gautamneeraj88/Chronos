@@ -1,4 +1,3 @@
-//TODO: Execution, executionStatus enum
 export type ExecutionStatus =
   | "PENDING"
   | "RUNNING"
@@ -8,7 +7,9 @@ export type ExecutionStatus =
 
 export interface Execution {
   id: string;
+  orgId: string;
   workflowId: string;
+  workflowVersion: number;
   status: ExecutionStatus;
   currentStepIndex: number;
   input: Record<string, unknown>;

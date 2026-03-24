@@ -58,6 +58,15 @@ services:
       retries: 5
       start_period: 30s
 
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    container_name: chronos-jaeger
+    ports:
+      - '16686:16686'  # Jaeger UI
+      - '4318:4318'    # OTLP HTTP receiver
+    environment:
+      COLLECTOR_OTLP_ENABLED: 'true'
+
 volumes:
   mongodb_data:
   redis_data:

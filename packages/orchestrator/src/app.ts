@@ -2,6 +2,7 @@ import express, { Express } from 'express';
 import { WorkflowService, ExecutionService } from './services';
 import { internalRouter } from './routes';
 import { errorHandler } from './middleware/errorHandler';
+import { register } from './metrics/metrics';
 
 export interface OrchestratorDeps {
   workflowService: WorkflowService;
@@ -17,6 +18,11 @@ export function createApp(deps: OrchestratorDeps): Express {
       status: 'ok',
       service: 'orchestrator',
     });
+  });
+
+  app.get('/metrics', async (_req, res) => {
+    res.set('Content-Type', register.contentType);
+    res.end(await register.metrics());
   });
 
   //All routes prefixed with /internal - not exposed publicly

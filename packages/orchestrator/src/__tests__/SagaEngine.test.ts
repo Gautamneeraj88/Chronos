@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 // A simple 3-step workflow used in most tests
 const threeStepWorkflow: WorkflowDefinition = {
   id: 'wf-1',
+  orgId: 'test-org',
   name: 'order-processing',
   version: 1,
   createdAt: new Date(),
@@ -42,6 +43,7 @@ const threeStepWorkflow: WorkflowDefinition = {
 // A workflow where no steps have compensations
 const noCompensationWorkflow: WorkflowDefinition = {
   id: 'wf-2',
+  orgId: 'test-org',
   name: 'simple-workflow',
   version: 1,
   createdAt: new Date(),

@@ -35,12 +35,17 @@ export class RecoveryEngine {
     for (const execution of active) {
       try {
         const events = await this.eventRepo.findByExecutionId(execution.id);
-        const workflow = await this.workflowRepo.findById(execution.workflowId);
+        const workflow = await this.workflowRepo.findByIdAndVersion(
+          execution.workflowId,
+          execution.workflowVersion,
+          execution.orgId,
+        );
 
         if (!workflow) {
           logger.error('Recovery: workflow not found for execution', {
             executionId: execution.id,
             workflowId: execution.workflowId,
+            workflowVersion: execution.workflowVersion,
           });
           await this.executionRepo.updateStatus(execution.id, 'FAILED', {
             error: 'Workflow definition not found during recovery',

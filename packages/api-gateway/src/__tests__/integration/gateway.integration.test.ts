@@ -1,23 +1,24 @@
 import request from 'supertest';
-import jwt from 'jsonwebtoken';
 import { createApp } from '../../app';
 import { loadConfig } from '../../config/config';
-import { IOrchestratorClient } from '../../http/IOrchestratorClient';
+import { IOrchestratorClient, ValidatedAuth } from '../../http/IOrchestratorClient';
 import { NotFoundError } from '@chronos/shared';
 
 const config = loadConfig();
 
-function makeToken(payload = { userId: 'test-user', email: 'test@chronos.local' }) {
-  return jwt.sign(payload, config.jwtSecret, { expiresIn: '1h' });
-}
+const VALID_AUTH: ValidatedAuth = { orgId: 'org-test', userId: 'test-user' };
+const VALID_KEY = 'chron_live_valid-test-key';
 
 function makeOrchestrator(overrides: Partial<IOrchestratorClient> = {}): IOrchestratorClient {
   return {
-    createWorkflow:     jest.fn().mockResolvedValue({ id: 'wf-1', name: 'test', version: 1, steps: [], createdAt: new Date(), updatedAt: new Date() }),
+    validateApiKey: jest.fn().mockImplementation((key: string) =>
+      key === VALID_KEY ? Promise.resolve(VALID_AUTH) : Promise.resolve(null),
+    ),
+    createWorkflow:     jest.fn().mockResolvedValue({ id: 'wf-1', orgId: 'org-test', name: 'test', version: 1, steps: [], createdAt: new Date(), updatedAt: new Date() }),
     listWorkflows:      jest.fn().mockResolvedValue([]),
-    getWorkflow:        jest.fn().mockResolvedValue({ id: 'wf-1', name: 'test', version: 1, steps: [], createdAt: new Date(), updatedAt: new Date() }),
-    triggerExecution:   jest.fn().mockResolvedValue({ id: 'exec-1', status: 'COMPLETED', workflowId: 'wf-1', currentStepIndex: 0, input: {}, output: {}, error: null, startedAt: new Date(), completedAt: new Date(), createdBy: 'test-user' }),
-    getExecution:       jest.fn().mockResolvedValue({ id: 'exec-1', status: 'COMPLETED', workflowId: 'wf-1', currentStepIndex: 0, input: {}, output: {}, error: null, startedAt: new Date(), completedAt: new Date(), createdBy: 'test-user' }),
+    getWorkflow:        jest.fn().mockResolvedValue({ id: 'wf-1', orgId: 'org-test', name: 'test', version: 1, steps: [], createdAt: new Date(), updatedAt: new Date() }),
+    triggerExecution:   jest.fn().mockResolvedValue({ id: 'exec-1', orgId: 'org-test', status: 'COMPLETED', workflowId: 'wf-1', workflowVersion: 1, currentStepIndex: 0, input: {}, output: {}, error: null, startedAt: new Date(), completedAt: new Date(), createdBy: 'test-user' }),
+    getExecution:       jest.fn().mockResolvedValue({ id: 'exec-1', orgId: 'org-test', status: 'COMPLETED', workflowId: 'wf-1', workflowVersion: 1, currentStepIndex: 0, input: {}, output: {}, error: null, startedAt: new Date(), completedAt: new Date(), createdBy: 'test-user' }),
     getExecutionEvents: jest.fn().mockResolvedValue([]),
     ...overrides,
   };
@@ -44,7 +45,7 @@ describe('API Gateway — integration', () => {
     });
   });
 
-  describe('Authentication', () => {
+  describe('Authentication — API key flow', () => {
     it('returns 401 with no token', async () => {
       const app = createApp(config, { orchestratorClient: makeOrchestrator() });
       const res = await request(app).get('/workflows');
@@ -54,32 +55,24 @@ describe('API Gateway — integration', () => {
       expect(res.body.error.requestId).toBeDefined();
     });
 
-    it('returns 401 with malformed token', async () => {
+    it('returns 401 when API key is invalid', async () => {
       const app = createApp(config, { orchestratorClient: makeOrchestrator() });
       const res = await request(app)
         .get('/workflows')
-        .set('Authorization', 'Bearer not.a.token');
+        .set('Authorization', 'Bearer bad-api-key');
 
       expect(res.status).toBe(401);
     });
 
-    it('returns 401 with token signed by wrong secret', async () => {
-      const app = createApp(config, { orchestratorClient: makeOrchestrator() });
-      const badToken = jwt.sign({ userId: 'x' }, 'wrong-secret-here!', { expiresIn: '1h' });
+    it('accepts a valid API key and calls orchestrator with orgId', async () => {
+      const orchestrator = makeOrchestrator();
+      const app = createApp(config, { orchestratorClient: orchestrator });
       const res = await request(app)
         .get('/workflows')
-        .set('Authorization', `Bearer ${badToken}`);
-
-      expect(res.status).toBe(401);
-    });
-
-    it('accepts a valid token', async () => {
-      const app = createApp(config, { orchestratorClient: makeOrchestrator() });
-      const res = await request(app)
-        .get('/workflows')
-        .set('Authorization', `Bearer ${makeToken()}`);
+        .set('Authorization', `Bearer ${VALID_KEY}`);
 
       expect(res.status).toBe(200);
+      expect(orchestrator.listWorkflows).toHaveBeenCalledWith(VALID_AUTH.orgId);
     });
   });
 
@@ -88,7 +81,7 @@ describe('API Gateway — integration', () => {
       const app = createApp(config, { orchestratorClient: makeOrchestrator() });
       const res = await request(app)
         .post('/workflows')
-        .set('Authorization', `Bearer ${makeToken()}`)
+        .set('Authorization', `Bearer ${VALID_KEY}`)
         .send({
           name: 'test-workflow',
           steps: [{ name: 'step-one', type: 'activity', activity: 'stepOne', retries: 3, timeoutMs: 5000, compensation: null }],
@@ -102,7 +95,7 @@ describe('API Gateway — integration', () => {
       const app = createApp(config, { orchestratorClient: makeOrchestrator() });
       const res = await request(app)
         .post('/workflows')
-        .set('Authorization', `Bearer ${makeToken()}`)
+        .set('Authorization', `Bearer ${VALID_KEY}`)
         .send({ steps: [] });
 
       expect(res.status).toBe(400);
@@ -113,7 +106,7 @@ describe('API Gateway — integration', () => {
       const app = createApp(config, { orchestratorClient: makeOrchestrator() });
       const res = await request(app)
         .post('/workflows')
-        .set('Authorization', `Bearer ${makeToken()}`)
+        .set('Authorization', `Bearer ${VALID_KEY}`)
         .send({
           name: 'Invalid Name With Spaces!',
           steps: [{ name: 'step-one', type: 'activity', activity: 'stepOne', retries: 3, timeoutMs: 5000, compensation: null }],
@@ -126,7 +119,7 @@ describe('API Gateway — integration', () => {
       const app = createApp(config, { orchestratorClient: makeOrchestrator() });
       const res = await request(app)
         .post('/workflows')
-        .set('Authorization', `Bearer ${makeToken()}`)
+        .set('Authorization', `Bearer ${VALID_KEY}`)
         .send({ name: 'test-workflow', steps: [] });
 
       expect(res.status).toBe(400);
@@ -139,7 +132,7 @@ describe('API Gateway — integration', () => {
       const app = createApp(config, { orchestratorClient: orchestrator });
       const res = await request(app)
         .post('/workflows')
-        .set('Authorization', `Bearer ${makeToken()}`)
+        .set('Authorization', `Bearer ${VALID_KEY}`)
         .send({
           name: 'test-workflow',
           steps: [{ name: 'step-one', type: 'activity', activity: 'stepOne', retries: 3, timeoutMs: 5000, compensation: null }],
@@ -155,7 +148,7 @@ describe('API Gateway — integration', () => {
       const app = createApp(config, { orchestratorClient: makeOrchestrator() });
       const res = await request(app)
         .post('/workflows/wf-1/executions')
-        .set('Authorization', `Bearer ${makeToken()}`)
+        .set('Authorization', `Bearer ${VALID_KEY}`)
         .send({ input: { orderId: 'ord-001' } });
 
       expect(res.status).toBe(201);
@@ -166,7 +159,7 @@ describe('API Gateway — integration', () => {
       const app = createApp(config, { orchestratorClient: makeOrchestrator() });
       const res = await request(app)
         .post('/workflows/wf-1/executions')
-        .set('Authorization', `Bearer ${makeToken()}`)
+        .set('Authorization', `Bearer ${VALID_KEY}`)
         .send({});
 
       expect(res.status).toBe(201);
