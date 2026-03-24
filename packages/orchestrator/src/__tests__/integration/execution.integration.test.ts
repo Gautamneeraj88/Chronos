@@ -184,3 +184,49 @@ describe('Compensation path', () => {
     expect(execRes.body.completedAt).toBeDefined();
   });
 });
+
+// ── Retry path ─────────────────────────────────────────────────────────────
+
+describe('Retry path', () => {
+  it('retry succeeds on second attempt → COMPLETED', async () => {
+    // MOCK_FAIL_ATTEMPTS=charge-card:1 makes charge-card fail on its first call only;
+    // the loopback publisher retries inline with attemptNumber+1 → succeeds on attempt 2
+    process.env.MOCK_FAIL_ATTEMPTS = 'charge-card:1';
+
+    const wfRes = await request(app).post('/internal/workflows').set(orgHeader).send(sampleWorkflow);
+    const execRes = await request(app)
+      .post('/internal/executions')
+      .set(orgHeader)
+      .send({ workflowId: wfRes.body.id, input: {}, userId: 'test-user' });
+
+    delete process.env.MOCK_FAIL_ATTEMPTS;
+
+    expect(execRes.body.status).toBe('COMPLETED');
+    expect(execRes.body.output['charge-card']).toBeDefined();
+  });
+
+  it('max retries exceeded → FAILED', async () => {
+    // Use retries:1 so only 2 total attempts; MOCK_FAIL_STEPS makes every attempt fail
+    process.env.MOCK_FAIL_STEPS = 'charge-card';
+
+    const wfRes = await request(app)
+      .post('/internal/workflows')
+      .set(orgHeader)
+      .send({
+        name: 'low-retry-workflow',
+        steps: [
+          { name: 'charge-card', type: 'activity', activity: 'chargeCard', retries: 1, timeoutMs: 5000, compensation: null },
+        ],
+      });
+    const execRes = await request(app)
+      .post('/internal/executions')
+      .set(orgHeader)
+      .send({ workflowId: wfRes.body.id, input: {}, userId: 'test-user' });
+
+    delete process.env.MOCK_FAIL_STEPS;
+
+    expect(execRes.body.status).toBe('FAILED');
+    expect(execRes.body.error).toBeDefined();
+    expect(execRes.body.completedAt).toBeDefined();
+  });
+});

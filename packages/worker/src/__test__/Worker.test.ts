@@ -114,6 +114,19 @@ describe('Worker', () => {
       const call = mockSend.mock.calls[0][0];
       expect(call.messages[0].key).toBe('exec-123');
     });
+
+    it('publishes success when activity succeeds on attempt 2 (after retry)', async () => {
+      // Simulates: worker receives a step with attemptNumber=2 (re-published by a prior failed attempt)
+      const payload = makePayload({ stepId: 'charge-card', activityName: 'chargeCard', attemptNumber: 2, retries: 3 });
+
+      await mockEachMessageHandler(makeMessage(payload));
+
+      const call = mockSend.mock.calls[0][0];
+      expect(call.topic).toBe(TOPICS.STEP_RESULT);
+      const result = JSON.parse(call.messages[0].value);
+      expect(result.success).toBe(true);
+      expect(result.stepId).toBe('charge-card');
+    });
   });
 
   describe('eachMessage — failure + retry path', () => {
@@ -173,6 +186,30 @@ describe('Worker', () => {
       const payload = makePayload({ activityName: 'nonExistentActivity', stepId: 'bad-step', retries: 0 });
 
       await expect(mockEachMessageHandler(makeMessage(payload))).resolves.not.toThrow();
+    });
+
+    it('backoff delay doubles: 1000ms on attempt 1, 2000ms on attempt 2', async () => {
+      // Attempt 1 → delay = min(1000 * 2^0, 30000) = 1000ms
+      const p1 = mockEachMessageHandler(makeMessage(
+        makePayload({ stepId: 'bad-step', activityName: 'nonExistentActivity', attemptNumber: 1, retries: 3 }),
+      ));
+      await jest.advanceTimersByTimeAsync(999);
+      expect(mockSend).not.toHaveBeenCalled();   // retry not fired yet
+      await jest.advanceTimersByTimeAsync(1);
+      await p1;
+      expect(mockSend).toHaveBeenCalledTimes(1); // fired at exactly 1000ms
+
+      jest.clearAllMocks();
+
+      // Attempt 2 → delay = min(1000 * 2^1, 30000) = 2000ms
+      const p2 = mockEachMessageHandler(makeMessage(
+        makePayload({ stepId: 'bad-step', activityName: 'nonExistentActivity', attemptNumber: 2, retries: 3 }),
+      ));
+      await jest.advanceTimersByTimeAsync(1999);
+      expect(mockSend).not.toHaveBeenCalled();   // retry not fired yet
+      await jest.advanceTimersByTimeAsync(1);
+      await p2;
+      expect(mockSend).toHaveBeenCalledTimes(1); // fired at exactly 2000ms
     });
   });
 

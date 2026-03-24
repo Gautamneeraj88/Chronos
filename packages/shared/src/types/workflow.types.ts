@@ -1,5 +1,3 @@
-//TODO: WorkflowDefinition, WorkflowStep
-
 export interface WorkflowStep {
   name: string;
   type: 'activity';

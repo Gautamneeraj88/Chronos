@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import Redis from 'ioredis';
 import { Express } from 'express';
 import { StepExecuteMessage } from '@chronos/shared';
+import { resetStepCallCounts } from '../../activities/mock/mockUtils';
 import { MongoWorkflowRepository }  from '../../repositories/WorkflowRepository';
 import { MongoExecutionRepository } from '../../repositories/ExecutionRepository';
 import { MongoEventRepository }     from '../../repositories/EventRepository';
@@ -39,6 +40,7 @@ export async function buildTestApp(): Promise<Express> {
 
   // Loopback publisher: runs activities in-process and feeds results back into
   // ExecutionService — keeps integration tests synchronous without needing Kafka.
+  // Implements the same retry logic as the real Worker (inline, no delay).
   // executionService is assigned below after construction (late binding).
   let executionService: ExecutionService;
   const stepPublisher = {
@@ -60,6 +62,10 @@ export async function buildTestApp(): Promise<Express> {
           output,
         });
       } catch (err) {
+        if (message.attemptNumber <= message.retries) {
+          // Retry inline — no delay in tests
+          return stepPublisher.publish({ ...message, attemptNumber: message.attemptNumber + 1 });
+        }
         await executionService.handleStepResult({
           executionId: message.executionId,
           stepId: message.stepId,
@@ -93,6 +99,8 @@ export async function cleanDatabase(): Promise<void> {
   const lockKeys = await redisClient.keys('lock:*');
   if (lockKeys.length > 0) await redisClient.del(...lockKeys);
   await redisClient.del('chronos:pending-timeouts');
+  // Reset mock activity call counts so MOCK_FAIL_ATTEMPTS tests don't bleed across test cases
+  resetStepCallCounts();
 }
 
 export async function teardown(): Promise<void> {

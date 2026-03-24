@@ -1,5 +1,3 @@
-//TODO: ChronosError base class
-
 export class ChronosError extends Error {
   public readonly code: string;
 

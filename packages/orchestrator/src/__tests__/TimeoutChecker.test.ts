@@ -80,6 +80,20 @@ describe('TimeoutChecker', () => {
     expect(store.consumeExpired).toHaveBeenCalledTimes(1);
   });
 
+  it('does not fire false timeout when step completed and key was cancelled', async () => {
+    // consumeExpired returns [] because the step finished and cancel() removed the key
+    const store = makeTimeoutStore([]);
+    const svc = makeExecutionService();
+    const checker = new TimeoutChecker(store, svc as unknown as ExecutionService);
+
+    checker.start();
+    await jest.advanceTimersByTimeAsync(1000);
+    checker.stop();
+
+    expect(store.consumeExpired).toHaveBeenCalledTimes(1);
+    expect(svc.handleStepResult).not.toHaveBeenCalled();
+  });
+
   it('stops polling after stop() is called', async () => {
     const store = makeTimeoutStore([]);
     const svc = makeExecutionService();

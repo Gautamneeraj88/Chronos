@@ -1,5 +1,3 @@
-//TODO: DomainEvent, DomainEventType enum
-
 export type DomainEventType =
   | 'EXECUTION_STARTED'
   | 'EXECUTION_COMPLETED'

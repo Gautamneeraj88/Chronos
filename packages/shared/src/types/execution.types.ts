@@ -1,4 +1,3 @@
-//TODO: Execution, executionStatus enum
 export type ExecutionStatus =
   | "PENDING"
   | "RUNNING"
