@@ -3,6 +3,7 @@ import { GatewayConfig } from './config/config';
 import { requestIdMiddleware, rateLimitMiddleware, errorHandler } from './middleware';
 import { healthRouter, workflowRouter, executionRouter } from './routes';
 import { IOrchestratorClient } from './http';
+import { createYogaMiddleware } from './graphql';
 
 // Dependencies the app needs injected (so tests can pass mocks)
 export interface AppDependencies {
@@ -25,6 +26,11 @@ export function createApp(config: GatewayConfig, deps: AppDependencies): Express
   app.use('/health', healthRouter());
   app.use('/workflows', workflowRouter(deps.orchestratorClient));
   app.use('/executions', executionRouter(deps.orchestratorClient));
+
+  // GraphQL endpoint — yoga handles its own auth via context builder
+  const yoga = createYogaMiddleware(deps.orchestratorClient);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  app.use('/graphql', yoga as any);
 
   // Error handler MUST be last - Express identifies it by the 4 arguments
   app.use(errorHandler);

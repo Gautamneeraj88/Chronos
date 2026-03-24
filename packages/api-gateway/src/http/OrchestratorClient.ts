@@ -90,4 +90,13 @@ export class OrchestratorClient implements IOrchestratorClient {
     });
     return res;
   }
+
+  async listExecutions(orgId: string, status?: string): Promise<Execution[]> {
+    const params = status ? { status } : {};
+    const { data: res } = await this.http.get('/internal/executions', {
+      headers: { 'X-Org-Id': orgId },
+      params,
+    });
+    return res;
+  }
 }

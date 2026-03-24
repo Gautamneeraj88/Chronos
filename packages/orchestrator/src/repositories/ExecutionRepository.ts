@@ -19,6 +19,12 @@ export class MongoExecutionRepository implements IExecutionRepository {
     return docs.map((d) => this.toPlain(d));
   }
 
+  async listByOrgAndStatus(orgId: string, status?: ExecutionStatus): Promise<Execution[]> {
+    const query = status ? { orgId, status } : { orgId };
+    const docs = await ExecutionModel.find(query).sort({ startedAt: -1 });
+    return docs.map((d) => this.toPlain(d));
+  }
+
   async updateStatus(
     id: string,
     status: ExecutionStatus,

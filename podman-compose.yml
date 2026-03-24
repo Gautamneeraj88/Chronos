@@ -58,6 +58,24 @@ services:
       retries: 5
       start_period: 30s
 
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: chronos-rabbitmq
+    ports:
+      - '5672:5672'    # AMQP
+      - '15672:15672'  # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: chronos
+      RABBITMQ_DEFAULT_PASS: chronos_dev
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   jaeger:
     image: jaegertracing/all-in-one:1.57
     container_name: chronos-jaeger
@@ -71,3 +89,4 @@ volumes:
   mongodb_data:
   redis_data:
   kafka-data:
+  rabbitmq_data:

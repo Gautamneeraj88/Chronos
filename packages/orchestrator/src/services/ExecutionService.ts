@@ -15,6 +15,7 @@ import { IWorkflowRepository } from '../repositories/IWorkflowRepository';
 import { ILockService } from '../locks/ILockService';
 import { SagaEngine } from '../domain/SagaEngine';
 import { StepPublisher } from './StepPublisher';
+import { NotificationPublisher } from './NotificationPublisher';
 import { ITimeoutStore } from '../timeouts';
 import {
   executionStarted,
@@ -35,6 +36,7 @@ export class ExecutionService {
     private readonly sagaEngine: SagaEngine,
     private readonly stepPublisher: StepPublisher,
     private readonly timeoutStore: ITimeoutStore,
+    private readonly notificationPublisher?: NotificationPublisher,
   ) {}
 
   // ── Trigger a brand new execution ───────────────────────────────────────
@@ -185,24 +187,42 @@ export class ExecutionService {
           }
         }
         await this.eventRepo.append(this.makeEvent(executionId, 'EXECUTION_COMPLETED'));
+        const completedAt = new Date();
         await this.executionRepo.updateStatus(executionId, 'COMPLETED', {
-          completedAt: new Date(),
+          completedAt,
           output,
         });
         executionCompleted.inc({ status: 'COMPLETED' });
         activeExecutions.dec();
         logger.info('Execution completed', { executionId });
+        this.notificationPublisher?.publish({
+          executionId,
+          workflowId: execution.workflowId,
+          orgId: execution.orgId,
+          status: 'COMPLETED',
+          output,
+          completedAt: completedAt.toISOString(),
+        });
       } else if (action.type === 'FAIL') {
         await this.eventRepo.append(
           this.makeEvent(executionId, 'EXECUTION_FAILED', { reason: action.reason }),
         );
+        const failedAt = new Date();
         await this.executionRepo.updateStatus(executionId, 'FAILED', {
-          completedAt: new Date(),
+          completedAt: failedAt,
           error: action.reason,
         });
         executionCompleted.inc({ status: 'FAILED' });
         activeExecutions.dec();
         logger.warn('Execution failed', { executionId, reason: action.reason });
+        this.notificationPublisher?.publish({
+          executionId,
+          workflowId: execution.workflowId,
+          orgId: execution.orgId,
+          status: 'FAILED',
+          error: action.reason,
+          completedAt: failedAt.toISOString(),
+        });
       } else if (action.type === 'EXECUTE_STEP') {
         const { step, stepIndex } = action;
 
@@ -303,6 +323,10 @@ export class ExecutionService {
 
   async getExecutionEvents(executionId: string): Promise<DomainEvent[]> {
     return this.eventRepo.findByExecutionId(executionId);
+  }
+
+  async listExecutions(orgId: string, status?: string): Promise<Execution[]> {
+    return this.executionRepo.listByOrgAndStatus(orgId, status as any);
   }
 
   // ── Helper: create a domain event ───────────────────────────────────────

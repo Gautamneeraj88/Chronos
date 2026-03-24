@@ -12,6 +12,7 @@ const fakeOrchestrator: IOrchestratorClient = {
   triggerExecution: jest.fn(),
   getExecution: jest.fn(),
   getExecutionEvents: jest.fn(),
+  listExecutions: jest.fn(),
 };
 
 const app = createApp(loadConfig(), { orchestratorClient: fakeOrchestrator });
