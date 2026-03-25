@@ -7,6 +7,9 @@ const ConfigSchema = z.object({
   kafkaBrokers: z.string().default('localhost:9092'),
   nodeEnv: z.enum(['development', 'production', 'test']).default('development'),
   logLevel: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+  neo4jUri:      z.string().default('bolt://localhost:7687'),
+  neo4jUsername: z.string().default('neo4j'),
+  neo4jPassword: z.string().default('chronos_dev'),
 });
 
 export type OrchestratorConfig = z.infer<typeof ConfigSchema>;
@@ -19,6 +22,9 @@ export function loadConfig(): OrchestratorConfig {
     kafkaBrokers: process.env.KAFKA_BROKERS,
     nodeEnv:      process.env.NODE_ENV,
     logLevel:     process.env.LOG_LEVEL,
+    neo4jUri:      process.env.NEO4J_URI,
+    neo4jUsername: process.env.NEO4J_USERNAME,
+    neo4jPassword: process.env.NEO4J_PASSWORD,
   });
 
    if (!result.success) {

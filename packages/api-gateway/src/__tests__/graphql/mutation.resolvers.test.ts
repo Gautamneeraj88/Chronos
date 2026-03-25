@@ -11,6 +11,11 @@ const mockClient = {
   getExecution: jest.fn(),
   getExecutionEvents: jest.fn(),
   listExecutions: jest.fn(),
+  workflowsByActivity: jest.fn(),
+  failurePaths: jest.fn(),
+  bottlenecks: jest.fn(),
+  executionGraph: jest.fn(),
+  activityDependencyImpact: jest.fn(),
 };
 
 const ctx: GraphQLContext = {
@@ -29,7 +34,11 @@ describe('Mutation.registerWorkflow', () => {
     const input = { name: 'My Workflow', steps: [] };
     const result = await mutationResolvers.Mutation.registerWorkflow({}, { input }, ctx);
 
-    expect(mockClient.createWorkflow).toHaveBeenCalledWith(input, 'org-1');
+    // Resolver normalizes input: adds orgId and injects type:'activity' on each step
+    expect(mockClient.createWorkflow).toHaveBeenCalledWith(
+      { name: 'My Workflow', steps: [], orgId: 'org-1' },
+      'org-1',
+    );
     expect(result).toBe(wf);
   });
 });

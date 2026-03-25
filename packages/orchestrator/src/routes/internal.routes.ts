@@ -1,7 +1,8 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { WorkflowService }   from '../services/WorkflowService';
-import { ExecutionService }  from '../services/ExecutionService';
-import { ApiKeyService }     from '../services/ApiKeyService';
+import { WorkflowService }    from '../services/WorkflowService';
+import { ExecutionService }   from '../services/ExecutionService';
+import { GraphQueryService }  from '../services/GraphQueryService';
+import { ApiKeyService }      from '../services/ApiKeyService';
 import { CreateWorkflowSchema, TriggerExecutionSchema, ValidationError } from '@chronos/shared';
 
 // Guards POST /api-keys when ADMIN_TOKEN env var is set.
@@ -26,7 +27,8 @@ const apiKeyService = new ApiKeyService();
 
 export function internalRouter(
   workflowService: WorkflowService,
-  executionService: ExecutionService
+  executionService: ExecutionService,
+  graphQueryService?: GraphQueryService,
 ): Router {
   const router = Router();
 
@@ -152,6 +154,85 @@ export function internalRouter(
         return;
       }
       res.status(200).json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // ── Graph query endpoints (Neo4j) ──────────────────────────────────────
+  // Return 503 when Neo4j is unavailable (graphQueryService not wired).
+
+  // GET /internal/graph/workflows-by-activity?activity=<activityName>
+  router.get('/graph/workflows-by-activity', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!graphQueryService) {
+        res.status(503).json({ error: { code: 'UNAVAILABLE', message: 'Graph database not available' } });
+        return;
+      }
+      const activity = req.query.activity as string | undefined;
+      if (!activity) throw new ValidationError('activity query param is required');
+      const results = await graphQueryService.workflowsByActivity(activity);
+      res.status(200).json(results);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // GET /internal/graph/failure-paths?orgId=<orgId>
+  router.get('/graph/failure-paths', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!graphQueryService) {
+        res.status(503).json({ error: { code: 'UNAVAILABLE', message: 'Graph database not available' } });
+        return;
+      }
+      const orgId = (req.query.orgId as string | undefined) ?? getOrgId(req);
+      const results = await graphQueryService.failurePaths(orgId);
+      res.status(200).json(results);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // GET /internal/graph/bottlenecks?orgId=<orgId>
+  router.get('/graph/bottlenecks', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!graphQueryService) {
+        res.status(503).json({ error: { code: 'UNAVAILABLE', message: 'Graph database not available' } });
+        return;
+      }
+      const orgId = (req.query.orgId as string | undefined) ?? getOrgId(req);
+      const results = await graphQueryService.bottlenecks(orgId);
+      res.status(200).json(results);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // GET /internal/graph/execution/:id
+  router.get('/graph/execution/:id', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!graphQueryService) {
+        res.status(503).json({ error: { code: 'UNAVAILABLE', message: 'Graph database not available' } });
+        return;
+      }
+      const results = await graphQueryService.executionGraph(req.params.id);
+      res.status(200).json(results);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // GET /internal/graph/activity-impact?activity=<activityName>
+  router.get('/graph/activity-impact', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!graphQueryService) {
+        res.status(503).json({ error: { code: 'UNAVAILABLE', message: 'Graph database not available' } });
+        return;
+      }
+      const activity = req.query.activity as string | undefined;
+      if (!activity) throw new ValidationError('activity query param is required');
+      const results = await graphQueryService.activityDependencyImpact(activity);
+      res.status(200).json(results);
     } catch (err) {
       next(err);
     }

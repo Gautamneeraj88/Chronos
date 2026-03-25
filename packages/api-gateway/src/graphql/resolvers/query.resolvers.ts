@@ -30,5 +30,45 @@ export const queryResolvers = {
       const all = await ctx.orchestratorClient.listExecutions(ctx.orgId, status);
       return all;
     },
+
+    workflowsByActivity: async (
+      _: unknown,
+      { activityName }: { activityName: string },
+      ctx: GraphQLContext,
+    ) => {
+      return ctx.orchestratorClient.workflowsByActivity(activityName, ctx.orgId);
+    },
+
+    failurePaths: async (
+      _: unknown,
+      { orgId }: { orgId: string },
+      ctx: GraphQLContext,
+    ) => {
+      return ctx.orchestratorClient.failurePaths(orgId);
+    },
+
+    bottlenecks: async (
+      _: unknown,
+      { orgId }: { orgId: string },
+      ctx: GraphQLContext,
+    ) => {
+      return ctx.orchestratorClient.bottlenecks(orgId);
+    },
+
+    executionGraph: async (
+      _: unknown,
+      { executionId }: { executionId: string },
+      ctx: GraphQLContext,
+    ) => {
+      return ctx.orchestratorClient.executionGraph(executionId, ctx.orgId);
+    },
+
+    activityDependencyImpact: async (
+      _: unknown,
+      { activityName }: { activityName: string },
+      ctx: GraphQLContext,
+    ) => {
+      return ctx.orchestratorClient.activityDependencyImpact(activityName, ctx.orgId);
+    },
   },
 };

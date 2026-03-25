@@ -13,6 +13,11 @@ const fakeOrchestrator: IOrchestratorClient = {
   getExecution: jest.fn(),
   getExecutionEvents: jest.fn(),
   listExecutions: jest.fn(),
+  workflowsByActivity: jest.fn(),
+  failurePaths: jest.fn(),
+  bottlenecks: jest.fn(),
+  executionGraph: jest.fn(),
+  activityDependencyImpact: jest.fn(),
 };
 
 const app = createApp(loadConfig(), { orchestratorClient: fakeOrchestrator });

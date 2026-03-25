@@ -20,7 +20,10 @@ import { createApp } from './app';
 import { createLogger } from '@chronos/shared';
 import { KafkaClient } from '@chronos/kafka';
 import { RabbitMQClient } from '@chronos/rabbitmq';
+import { Neo4jClient } from '@chronos/neo4j';
 import { NotificationPublisher } from './services/NotificationPublisher';
+import { WorkflowGraphService } from './services/WorkflowGraphService';
+import { GraphQueryService } from './services/GraphQueryService';
 
 async function bootstrap(): Promise<void> {
   const config = loadConfig();
@@ -58,8 +61,25 @@ async function bootstrap(): Promise<void> {
     logger.warn('RabbitMQ unavailable — notifications disabled', { err });
   }
 
+  // 4c. Connect to Neo4j for workflow graph (optional — if unavailable, skip)
+  let graphService: WorkflowGraphService | undefined;
+  let graphQueryService: GraphQueryService | undefined;
+  try {
+    const neo4jClient = Neo4jClient.getInstance(
+      config.neo4jUri,
+      config.neo4jUsername,
+      config.neo4jPassword,
+    );
+    await neo4jClient.verifyConnectivity();
+    graphService = new WorkflowGraphService(neo4jClient);
+    graphQueryService = new GraphQueryService(neo4jClient);
+    logger.info('Neo4j connected — WorkflowGraphService + GraphQueryService ready');
+  } catch (err) {
+    logger.warn('Neo4j unavailable — graph sync disabled', { err });
+  }
+
   // 5. Instantiate application services
-  const workflowService = new WorkflowService(workflowRepo);
+  const workflowService = new WorkflowService(workflowRepo, graphService);
   const executionService = new ExecutionService(
     executionRepo,
     eventRepo,
@@ -69,6 +89,7 @@ async function bootstrap(): Promise<void> {
     stepPublisher,
     timeoutStore,
     notificationPublisher,
+    graphService,
   );
 
   // 6. Recovery — MUST complete before accepting requests
@@ -82,7 +103,7 @@ async function bootstrap(): Promise<void> {
   await recoveryEngine.recoverInFlightExecutions();
 
   // 7. Create and start Express app — before consumer so health checks pass immediately
-  const app = createApp({ workflowService, executionService });
+  const app = createApp({ workflowService, executionService, graphQueryService });
   app.listen(config.port, () => {
     logger.info('Orchestrator running', {
       port: config.port,
