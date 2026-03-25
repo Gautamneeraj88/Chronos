@@ -6,6 +6,7 @@ describe('NotificationPublisher', () => {
     publish: jest.fn().mockReturnValue(true),
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const publisher = new NotificationPublisher(mockChannel as any);
 
   beforeEach(() => jest.clearAllMocks());

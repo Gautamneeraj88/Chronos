@@ -1,5 +1,6 @@
 import { mutationResolvers } from '../../graphql/resolvers/mutation.resolvers';
 import { GraphQLContext } from '../../graphql/resolvers/query.resolvers';
+import { IOrchestratorClient } from '../../http/IOrchestratorClient';
 
 const mockClient = {
   validateApiKey: jest.fn(),
@@ -13,7 +14,7 @@ const mockClient = {
 };
 
 const ctx: GraphQLContext = {
-  orchestratorClient: mockClient as any,
+  orchestratorClient: mockClient as unknown as IOrchestratorClient,
   orgId: 'org-1',
   userId: 'user-1',
 };

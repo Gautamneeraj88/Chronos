@@ -40,8 +40,10 @@ export class ActivityRunner {
     }
 
     try {
+      // Inject attempt number so activities can use per-attempt failure logic via shouldFail()
+      const enrichedInput = { ...input, _attempt: attempt };
       return await this.withTimeout(
-        activity(input),
+        activity(enrichedInput),
         step.timeoutMs,
         step.name
       );

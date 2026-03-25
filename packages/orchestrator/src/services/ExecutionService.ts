@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import {
   Execution,
+  ExecutionStatus,
   WorkflowDefinition,
   DomainEvent,
   StepResultMessage,
@@ -22,7 +23,7 @@ import {
   executionCompleted,
   activeExecutions,
 } from '../metrics/metrics';
-import { trace, context, SpanStatusCode } from '@opentelemetry/api';
+import { trace, SpanStatusCode } from '@opentelemetry/api';
 
 const logger = createLogger('orchestrator');
 const tracer = trace.getTracer('chronos-orchestrator');
@@ -103,7 +104,8 @@ export class ExecutionService {
       (e) =>
         (e.type === 'STEP_COMPLETED' ||
           e.type === 'STEP_FAILED' ||
-          e.type === 'COMPENSATION_COMPLETED') &&
+          e.type === 'COMPENSATION_COMPLETED' ||
+          e.type === 'COMPENSATION_FAILED') &&
         e.stepName === stepId,
     );
     if (alreadyTerminal) {
@@ -129,8 +131,9 @@ export class ExecutionService {
         stepId,
       });
     } else {
-      await this.eventRepo.append(this.makeEvent(executionId, 'STEP_FAILED', { error }, stepId));
-      logger.warn('Step failed', { executionId, stepId, error });
+      const failEventType = isCompensating ? 'COMPENSATION_FAILED' : 'STEP_FAILED';
+      await this.eventRepo.append(this.makeEvent(executionId, failEventType, { error }, stepId));
+      logger.warn(isCompensating ? 'Compensation failed' : 'Step failed', { executionId, stepId, error });
     }
 
     // Advance the saga to the next action
@@ -326,7 +329,7 @@ export class ExecutionService {
   }
 
   async listExecutions(orgId: string, status?: string): Promise<Execution[]> {
-    return this.executionRepo.listByOrgAndStatus(orgId, status as any);
+    return this.executionRepo.listByOrgAndStatus(orgId, status as ExecutionStatus | undefined);
   }
 
   // ── Helper: create a domain event ───────────────────────────────────────

@@ -19,6 +19,8 @@ import { RecoveryEngine } from './recovery';
 import { createApp } from './app';
 import { createLogger } from '@chronos/shared';
 import { KafkaClient } from '@chronos/kafka';
+import { RabbitMQClient } from '@chronos/rabbitmq';
+import { NotificationPublisher } from './services/NotificationPublisher';
 
 async function bootstrap(): Promise<void> {
   const config = loadConfig();
@@ -45,6 +47,17 @@ async function bootstrap(): Promise<void> {
   const sagaEngine = new SagaEngine();
   const stepPublisher = new StepPublisher(kafkaClient);
 
+  // 4b. Connect to RabbitMQ for execution notifications (optional — if unavailable, skip)
+  let notificationPublisher: NotificationPublisher | undefined;
+  try {
+    const rabbitClient = RabbitMQClient.getInstance();
+    await rabbitClient.connect();
+    notificationPublisher = new NotificationPublisher(rabbitClient.getChannel());
+    logger.info('RabbitMQ connected — NotificationPublisher ready');
+  } catch (err) {
+    logger.warn('RabbitMQ unavailable — notifications disabled', { err });
+  }
+
   // 5. Instantiate application services
   const workflowService = new WorkflowService(workflowRepo);
   const executionService = new ExecutionService(
@@ -55,6 +68,7 @@ async function bootstrap(): Promise<void> {
     sagaEngine,
     stepPublisher,
     timeoutStore,
+    notificationPublisher,
   );
 
   // 6. Recovery — MUST complete before accepting requests

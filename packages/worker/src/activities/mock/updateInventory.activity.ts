@@ -8,7 +8,8 @@ export async function updateInventory(
 ): Promise<Record<string, unknown>> {
   await mockDelay(5000);
 
-  if (shouldFail('update-inventory')) {
+  const attempt = (input._attempt as number | undefined) ?? 1;
+  if (shouldFail('update-inventory', attempt)) {
     throw new Error('Inventory service unavailable');
   }
 

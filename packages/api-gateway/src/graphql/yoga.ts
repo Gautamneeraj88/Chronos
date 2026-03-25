@@ -37,14 +37,11 @@ const fieldResolvers = {
 export function createYogaMiddleware(orchestratorClient: IOrchestratorClient) {
   const schema = createSchema<GraphQLContext>({
     typeDefs,
-    resolvers: [
-      queryResolvers,
-      mutationResolvers,
-      subscriptionResolvers,
-      fieldResolvers,
-    ] as any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolvers: [queryResolvers, mutationResolvers, subscriptionResolvers, fieldResolvers] as any,
   });
 
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   return createYoga<{}, GraphQLContext>({
     schema,
     graphqlEndpoint: '/graphql',

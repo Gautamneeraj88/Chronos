@@ -8,7 +8,8 @@ export async function sendConfirmation(
 ): Promise<Record<string, unknown>> {
   await mockDelay(50);
 
-  if (shouldFail('send-confirmation')) {
+  const attempt = (input._attempt as number | undefined) ?? 1;
+  if (shouldFail('send-confirmation', attempt)) {
     throw new Error('Email service timeout');
   }
 

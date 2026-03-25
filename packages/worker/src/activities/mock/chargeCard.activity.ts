@@ -6,7 +6,8 @@ const logger = createLogger('orchestrator');
 export async function chargeCard(input: Record<string, unknown>): Promise<Record<string, unknown>> {
   await mockDelay(150);
 
-  if (shouldFail('charge-card')) {
+  const attempt = (input._attempt as number | undefined) ?? 1;
+  if (shouldFail('charge-card', attempt)) {
     throw new Error('Card declined - insufficient funds');
   }
 

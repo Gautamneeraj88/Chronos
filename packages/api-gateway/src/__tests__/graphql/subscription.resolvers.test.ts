@@ -1,5 +1,8 @@
 import { subscriptionResolvers } from '../../graphql/resolvers/subscription.resolvers';
 import { GraphQLContext } from '../../graphql/resolvers/query.resolvers';
+import { IOrchestratorClient } from '../../http/IOrchestratorClient';
+
+type SubPayload = { executionUpdated: { id: string; status: string } };
 
 const mockClient = {
   validateApiKey: jest.fn(),
@@ -13,7 +16,7 @@ const mockClient = {
 };
 
 const ctx: GraphQLContext = {
-  orchestratorClient: mockClient as any,
+  orchestratorClient: mockClient as unknown as IOrchestratorClient,
   orgId: 'org-1',
   userId: 'user-1',
 };
@@ -72,7 +75,7 @@ describe('Subscription.executionUpdated', () => {
 
     // RUNNING (status change), COMPLETED (status change) → 2 yields then done
     expect(results).toHaveLength(2);
-    expect((results[1] as any).executionUpdated.status).toBe('COMPLETED');
+    expect((results[1] as SubPayload).executionUpdated.status).toBe('COMPLETED');
   });
 
   it('terminates when execution reaches FAILED', async () => {
@@ -92,7 +95,7 @@ describe('Subscription.executionUpdated', () => {
     }
 
     expect(results).toHaveLength(1);
-    expect((results[0] as any).executionUpdated.status).toBe('FAILED');
+    expect((results[0] as SubPayload).executionUpdated.status).toBe('FAILED');
   });
 
   it('does not yield when status is unchanged', async () => {
