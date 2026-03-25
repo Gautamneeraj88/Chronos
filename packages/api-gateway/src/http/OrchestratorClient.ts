@@ -8,6 +8,13 @@ import {
   InternalError,
 } from '@chronos/shared';
 import { IOrchestratorClient, ValidatedAuth } from './IOrchestratorClient';
+import {
+  WorkflowMatch,
+  StepFailureStat,
+  StepBottleneck,
+  StepExecutionRecord,
+  ActivityImpact,
+} from '../graphql/graph.types';
 
 export class OrchestratorClient implements IOrchestratorClient {
   private readonly http: AxiosInstance;
@@ -96,6 +103,45 @@ export class OrchestratorClient implements IOrchestratorClient {
     const { data: res } = await this.http.get('/internal/executions', {
       headers: { 'X-Org-Id': orgId },
       params,
+    });
+    return res;
+  }
+
+  async workflowsByActivity(activityName: string, orgId: string): Promise<WorkflowMatch[]> {
+    const { data: res } = await this.http.get('/internal/graph/workflows-by-activity', {
+      headers: { 'X-Org-Id': orgId },
+      params: { activity: activityName },
+    });
+    return res;
+  }
+
+  async failurePaths(orgId: string): Promise<StepFailureStat[]> {
+    const { data: res } = await this.http.get('/internal/graph/failure-paths', {
+      headers: { 'X-Org-Id': orgId },
+      params: { orgId },
+    });
+    return res;
+  }
+
+  async bottlenecks(orgId: string): Promise<StepBottleneck[]> {
+    const { data: res } = await this.http.get('/internal/graph/bottlenecks', {
+      headers: { 'X-Org-Id': orgId },
+      params: { orgId },
+    });
+    return res;
+  }
+
+  async executionGraph(executionId: string, orgId: string): Promise<StepExecutionRecord[]> {
+    const { data: res } = await this.http.get(`/internal/graph/execution/${executionId}`, {
+      headers: { 'X-Org-Id': orgId },
+    });
+    return res;
+  }
+
+  async activityDependencyImpact(activityName: string, orgId: string): Promise<ActivityImpact[]> {
+    const { data: res } = await this.http.get('/internal/graph/activity-impact', {
+      headers: { 'X-Org-Id': orgId },
+      params: { activity: activityName },
     });
     return res;
   }

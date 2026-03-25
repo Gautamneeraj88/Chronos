@@ -18,6 +18,7 @@ import { SagaEngine } from '../domain/SagaEngine';
 import { StepPublisher } from './StepPublisher';
 import { NotificationPublisher } from './NotificationPublisher';
 import { ITimeoutStore } from '../timeouts';
+import { WorkflowGraphService } from './WorkflowGraphService';
 import {
   executionStarted,
   executionCompleted,
@@ -38,6 +39,7 @@ export class ExecutionService {
     private readonly stepPublisher: StepPublisher,
     private readonly timeoutStore: ITimeoutStore,
     private readonly notificationPublisher?: NotificationPublisher,
+    private readonly graphService?: WorkflowGraphService,
   ) {}
 
   // ── Trigger a brand new execution ───────────────────────────────────────
@@ -68,6 +70,9 @@ export class ExecutionService {
     executionStarted.inc();
     activeExecutions.inc();
     logger.info('Execution created', { executionId: execution.id, workflowId });
+
+    // Fire-and-forget — Neo4j is secondary
+    this.graphService?.recordExecutionStarted(execution);
 
     return this.advanceExecution(execution, workflow, []);
   }
@@ -119,6 +124,14 @@ export class ExecutionService {
     // Step has reached a terminal state — cancel its pending timeout
     await this.timeoutStore.cancel(executionId, stepId);
 
+    // Compute step duration using the STEP_IN_FLIGHT event's occurredAt
+    const inFlightEvent = existingEvents.find(
+      (e) => e.type === 'STEP_IN_FLIGHT' && e.stepName === stepId,
+    );
+    const durationMs = inFlightEvent
+      ? Date.now() - inFlightEvent.occurredAt.getTime()
+      : 0;
+
     // Append the result event.
     // Compensation steps complete with COMPENSATION_COMPLETED so the SagaEngine
     // can track which compensations have run (it ignores STEP_COMPLETED in that path).
@@ -134,6 +147,20 @@ export class ExecutionService {
       const failEventType = isCompensating ? 'COMPENSATION_FAILED' : 'STEP_FAILED';
       await this.eventRepo.append(this.makeEvent(executionId, failEventType, { error }, stepId));
       logger.warn(isCompensating ? 'Compensation failed' : 'Step failed', { executionId, stepId, error });
+    }
+
+    // Fire-and-forget — record step result in Neo4j graph
+    if (this.graphService && execution.workflowId) {
+      // For attempt number, look at the message — default to 1 if not tracked
+      const graphStatus = success ? 'COMPLETED' : 'FAILED';
+      this.graphService.recordStepExecution(
+        execution.workflowId,
+        executionId,
+        stepId,
+        graphStatus,
+        1,
+        durationMs,
+      );
     }
 
     // Advance the saga to the next action

@@ -49,11 +49,50 @@ export const typeDefs = /* GraphQL */ `
     FAILED
   }
 
+  type WorkflowMatch {
+    id: ID!
+    name: String!
+    orgId: String!
+  }
+
+  type StepFailureStat {
+    step: String!
+    activity: String!
+    failureCount: Int!
+  }
+
+  type StepBottleneck {
+    step: String!
+    activity: String!
+    avgDurationMs: Float!
+    maxDurationMs: Float!
+    executionCount: Int!
+  }
+
+  type StepExecutionRecord {
+    step: String!
+    status: String!
+    attemptNumber: Int!
+    durationMs: Int!
+    occurredAt: String!
+  }
+
+  type ActivityImpact {
+    workflowName: String!
+    step: String!
+    compensatedBy: String!
+  }
+
   type Query {
     workflow(id: ID!): Workflow
     workflows: [Workflow!]!
     execution(id: ID!): Execution
     executions(status: ExecutionStatus): [Execution!]!
+    workflowsByActivity(activityName: String!): [WorkflowMatch!]!
+    failurePaths(orgId: String!): [StepFailureStat!]!
+    bottlenecks(orgId: String!): [StepBottleneck!]!
+    executionGraph(executionId: ID!): [StepExecutionRecord!]!
+    activityDependencyImpact(activityName: String!): [ActivityImpact!]!
   }
 
   type Mutation {

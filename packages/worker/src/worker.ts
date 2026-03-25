@@ -7,7 +7,7 @@ type Producer = Awaited<ReturnType<KafkaClient['getProducer']>>;
 const logger = createLogger('worker');
 
 export class Worker {
-  private readonly GROUP_ID = 'chronos-workers-2';
+  private readonly GROUP_ID = 'chronos-workers';
   private activityRunner: ActivityRunner;
   private kafkaClient: KafkaClient;
   private workerId: string;

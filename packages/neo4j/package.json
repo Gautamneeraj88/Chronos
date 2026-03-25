@@ -1,0 +1,20 @@
+{
+  "name": "@chronos/neo4j",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "eslint src --ext .ts",
+    "test": "echo 'No tests yet' && exit 0"
+  },
+  "dependencies": {
+    "@chronos/shared": "workspace:*",
+    "neo4j-driver": "^5.18.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}

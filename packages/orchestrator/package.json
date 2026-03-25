@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@chronos/kafka": "workspace:^",
+    "@chronos/neo4j": "workspace:^",
     "@chronos/rabbitmq": "workspace:^",
     "@chronos/shared": "workspace:*",
     "@opentelemetry/api": "^1.9.0",

@@ -67,6 +67,7 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: chronos
       RABBITMQ_DEFAULT_PASS: chronos_dev
+      RABBITMQ_ERLANG_COOKIE: "chronos-secret-cookie"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
@@ -74,6 +75,25 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
+
+  neo4j:
+    image: neo4j:5.18
+    container_name: chronos-neo4j
+    ports:
+      - '7474:7474'   # Browser UI
+      - '7687:7687'   # Bolt protocol
+    environment:
+      NEO4J_AUTH: neo4j/chronos_dev
+      NEO4J_PLUGINS: '["apoc"]'
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    healthcheck:
+      test: ['CMD-SHELL', 'cypher-shell -u neo4j -p chronos_dev "RETURN 1" || exit 1']
+      interval: 10s
+      timeout: 10s
+      retries: 10
       start_period: 30s
 
   jaeger:
@@ -90,3 +110,5 @@ volumes:
   redis_data:
   kafka-data:
   rabbitmq_data:
+  neo4j_data:
+  neo4j_logs:
