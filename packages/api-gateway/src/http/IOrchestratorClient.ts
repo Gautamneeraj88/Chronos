@@ -20,4 +20,5 @@ export interface IOrchestratorClient {
   ): Promise<Execution>;
   getExecution(id: string, orgId: string): Promise<Execution>;
   getExecutionEvents(executionId: string, orgId: string): Promise<DomainEvent[]>;
+  listExecutions(orgId: string, status?: string): Promise<Execution[]>;
 }

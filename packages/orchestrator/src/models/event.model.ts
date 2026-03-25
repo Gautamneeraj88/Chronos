@@ -19,6 +19,7 @@ const EventSchema = new Schema<DomainEvent>(
         'STEP_FAILED',
         'COMPENSATION_STARTED',
         'COMPENSATION_COMPLETED',
+        'COMPENSATION_FAILED',
       ] satisfies DomainEventType[],
       required: true,
     },

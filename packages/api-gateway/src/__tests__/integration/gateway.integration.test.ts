@@ -20,6 +20,7 @@ function makeOrchestrator(overrides: Partial<IOrchestratorClient> = {}): IOrches
     triggerExecution:   jest.fn().mockResolvedValue({ id: 'exec-1', orgId: 'org-test', status: 'COMPLETED', workflowId: 'wf-1', workflowVersion: 1, currentStepIndex: 0, input: {}, output: {}, error: null, startedAt: new Date(), completedAt: new Date(), createdBy: 'test-user' }),
     getExecution:       jest.fn().mockResolvedValue({ id: 'exec-1', orgId: 'org-test', status: 'COMPLETED', workflowId: 'wf-1', workflowVersion: 1, currentStepIndex: 0, input: {}, output: {}, error: null, startedAt: new Date(), completedAt: new Date(), createdBy: 'test-user' }),
     getExecutionEvents: jest.fn().mockResolvedValue([]),
+    listExecutions:     jest.fn().mockResolvedValue([]),
     ...overrides,
   };
 }

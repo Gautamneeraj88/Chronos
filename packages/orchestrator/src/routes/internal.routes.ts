@@ -71,6 +71,16 @@ export function internalRouter(
 
   // ── Execution endpoints ────────────────────────────────────────────────
 
+  router.get('/executions', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const status = req.query.status as string | undefined;
+      const executions = await executionService.listExecutions(getOrgId(req), status);
+      res.status(200).json(executions);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.post('/executions', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { workflowId, input, userId } = req.body;

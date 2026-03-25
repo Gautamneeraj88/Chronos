@@ -7,7 +7,7 @@ type Producer = Awaited<ReturnType<KafkaClient['getProducer']>>;
 const logger = createLogger('worker');
 
 export class Worker {
-  private readonly GROUP_ID = 'chronos-workers';
+  private readonly GROUP_ID = 'chronos-workers-2';
   private activityRunner: ActivityRunner;
   private kafkaClient: KafkaClient;
   private workerId: string;
@@ -95,6 +95,7 @@ export class Worker {
       const output = await this.activityRunner.execute(
         { name: stepId, type: 'activity' as const, activity: activityName, retries, timeoutMs: payload.timeoutMs, compensation: null },
         input,
+        attemptNumber,
       );
 
       stepDuration.observe({ activityName, success: 'true' }, Date.now() - startMs);

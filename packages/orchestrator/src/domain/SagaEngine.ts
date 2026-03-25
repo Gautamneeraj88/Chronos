@@ -66,6 +66,9 @@ export class SagaEngine {
           break;
 
         case 'COMPENSATION_COMPLETED':
+        case 'COMPENSATION_FAILED':
+          // Both mark the compensation as done — FAILED means "tried and gave up",
+          // still advance past it so we don't loop forever.
           state.compensatedSteps.add(event.stepName!);
           break;
 

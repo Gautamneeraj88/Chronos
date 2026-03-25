@@ -7,7 +7,8 @@ export type DomainEventType =
   | 'STEP_COMPLETED'
   | 'STEP_FAILED'
   | 'COMPENSATION_STARTED'
-  | 'COMPENSATION_COMPLETED';
+  | 'COMPENSATION_COMPLETED'
+  | 'COMPENSATION_FAILED';
 
 export interface DomainEvent {
   id: string;
