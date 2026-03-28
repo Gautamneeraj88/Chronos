@@ -47,13 +47,28 @@ export function createYogaMiddleware(orchestratorClient: IOrchestratorClient) {
     graphqlEndpoint: '/graphql',
     context: async ({ request }): Promise<GraphQLContext> => {
       const authHeader = request.headers.get('authorization') ?? '';
-      const rawKey = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
-      const auth = rawKey ? await orchestratorClient.validateApiKey(rawKey) : null;
-      return {
-        orchestratorClient,
-        orgId: auth?.orgId ?? '',
-        userId: auth?.userId ?? '',
-      };
+      const rawToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
+
+      if (!rawToken) {
+        return { orchestratorClient, orgId: '', userId: '' };
+      }
+
+      try {
+        // JWT (three dot-separated segments) → validate via /internal/auth/me
+        if (rawToken.split('.').length === 3) {
+          const user = await orchestratorClient.me(rawToken);
+          return { orchestratorClient, orgId: user.orgId, userId: user.id };
+        }
+        // API key path
+        const auth = await orchestratorClient.validateApiKey(rawToken);
+        return {
+          orchestratorClient,
+          orgId: auth?.orgId ?? '',
+          userId: auth?.userId ?? '',
+        };
+      } catch {
+        return { orchestratorClient, orgId: '', userId: '' };
+      }
     },
   });
 }

@@ -1,0 +1,92 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --sidebar-width: 220px;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply text-gray-900 antialiased bg-gray-50;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  /* Thin, modern scrollbars */
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-400;
+  }
+
+  /* Better focus rings globally */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-brand-500 ring-offset-1;
+  }
+}
+
+@layer components {
+  .page-header {
+    @apply flex items-center justify-between mb-6;
+  }
+
+  .page-title {
+    @apply text-xl font-semibold text-gray-900 tracking-tight;
+  }
+
+  .table-container {
+    @apply overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm;
+  }
+
+  .table-th {
+    @apply px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50;
+  }
+
+  .table-td {
+    @apply px-4 py-3 text-sm text-gray-700;
+  }
+
+  .table-tr {
+    @apply transition-colors hover:bg-gray-50/80;
+  }
+
+  .tab-btn {
+    @apply flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium -mb-px border-b-2 transition-colors border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300;
+  }
+
+  .tab-btn.active {
+    @apply border-brand-500 text-brand-600;
+  }
+
+  /* Legacy variants kept for backwards compat */
+  .tab-btn-active {
+    @apply border-brand-500 text-brand-600;
+  }
+
+  .tab-btn-inactive {
+    @apply border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300;
+  }
+
+  /* Stat card label */
+  .stat-label {
+    @apply text-xs font-semibold text-gray-500 uppercase tracking-wider;
+  }
+
+  .stat-value {
+    @apply text-3xl font-bold text-gray-900 mt-1 tabular-nums;
+  }
+}

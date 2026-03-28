@@ -6,6 +6,8 @@ import {
   CreateWorkflowInput,
   NotFoundError,
   InternalError,
+  User,
+  AuthSession,
 } from '@chronos/shared';
 import { IOrchestratorClient, ValidatedAuth } from './IOrchestratorClient';
 import {
@@ -144,5 +146,121 @@ export class OrchestratorClient implements IOrchestratorClient {
       params: { activity: activityName },
     });
     return res;
+  }
+
+  // ── Auth methods ──────────────────────────────────────────────────────────
+
+  async login(email: string, password: string): Promise<AuthSession | null> {
+    try {
+      const { data: res } = await this.http.post('/internal/auth/login', { email, password });
+      return res;
+    } catch {
+      return null;
+    }
+  }
+
+  async me(token: string): Promise<User> {
+    const { data: res } = await this.http.get('/internal/auth/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.user;
+  }
+
+  async refresh(token: string): Promise<AuthSession> {
+    const { data: res } = await this.http.post(
+      '/internal/auth/refresh',
+      {},
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    return res;
+  }
+
+  async register(
+    email: string,
+    password: string,
+    role: string,
+    orgId: string,
+    token: string,
+  ): Promise<User> {
+    const { data: res } = await this.http.post(
+      '/internal/auth/register',
+      { email, password, role },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'X-Org-Id': orgId,
+        },
+      },
+    );
+    return res.user;
+  }
+
+  async listUsers(orgId: string, token: string): Promise<User[]> {
+    const { data: res } = await this.http.get('/internal/auth/users', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'X-Org-Id': orgId,
+      },
+    });
+    return res.users;
+  }
+
+  async deleteUser(id: string, token: string): Promise<void> {
+    await this.http.delete(`/internal/auth/users/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  }
+
+  // ── API key management ─────────────────────────────────────────────────────
+
+  async listApiKeys(orgId: string): Promise<import('./IOrchestratorClient').ApiKeySummary[]> {
+    const { data: res } = await this.http.get('/internal/api-keys', {
+      headers: { 'X-Org-Id': orgId },
+    });
+    return res;
+  }
+
+  async createApiKey(
+    orgId: string,
+    userId: string,
+    name: string,
+  ): Promise<{ key: import('./IOrchestratorClient').ApiKeySummary; rawKey: string }> {
+    const { data: res } = await this.http.post(
+      '/internal/api-keys',
+      { name, userId },
+      { headers: { 'X-Org-Id': orgId } },
+    );
+    return res;
+  }
+
+  async revokeApiKey(id: string, orgId: string): Promise<void> {
+    await this.http.delete(`/internal/api-keys/${id}`, {
+      headers: { 'X-Org-Id': orgId },
+    });
+  }
+
+  // ── Webhook management ────────────────────────────────────────────────────
+
+  async listWebhooks(orgId: string): Promise<import('./IOrchestratorClient').WebhookSummary[]> {
+    const { data: res } = await this.http.get('/internal/webhooks', {
+      headers: { 'X-Org-Id': orgId },
+    });
+    return res;
+  }
+
+  async createWebhook(
+    orgId: string,
+    payload: { url: string; events: string[]; secret?: string },
+  ): Promise<import('./IOrchestratorClient').WebhookSummary> {
+    const { data: res } = await this.http.post('/internal/webhooks', payload, {
+      headers: { 'X-Org-Id': orgId },
+    });
+    return res;
+  }
+
+  async deleteWebhook(id: string, orgId: string): Promise<void> {
+    await this.http.delete(`/internal/webhooks/${id}`, {
+      headers: { 'X-Org-Id': orgId },
+    });
   }
 }

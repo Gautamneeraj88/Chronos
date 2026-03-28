@@ -3,6 +3,7 @@ import { WorkflowService }    from '../services/WorkflowService';
 import { ExecutionService }   from '../services/ExecutionService';
 import { GraphQueryService }  from '../services/GraphQueryService';
 import { ApiKeyService }      from '../services/ApiKeyService';
+import { WebhookService }     from '../services/WebhookService';
 import { CreateWorkflowSchema, TriggerExecutionSchema, ValidationError } from '@chronos/shared';
 
 // Guards POST /api-keys when ADMIN_TOKEN env var is set.
@@ -24,6 +25,7 @@ function requireAdminToken(req: Request, res: Response, next: NextFunction): voi
 }
 
 const apiKeyService = new ApiKeyService();
+const webhookService = new WebhookService();
 
 export function internalRouter(
   workflowService: WorkflowService,
@@ -130,14 +132,39 @@ export function internalRouter(
   // Protected by requireAdminToken when ADMIN_TOKEN env var is set.
   router.post('/api-keys', requireAdminToken, async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { orgId, userId, name } = req.body;
-      if (!orgId || !name) throw new ValidationError('orgId and name are required');
+      const orgId = (req.body.orgId as string | undefined) ?? getOrgId(req);
+      const { userId, name } = req.body;
+      if (!name) throw new ValidationError('name is required');
       const created = await apiKeyService.create(orgId, userId ?? 'system', name);
-      res.status(201).json({
-        key: created.rawKey,
-        orgId: created.orgId,
-        name: created.name,
-      });
+      // Also return a summary record so the dashboard can immediately show it in the list
+      const [summary] = await apiKeyService.list(orgId);
+      res.status(201).json({ key: summary, rawKey: created.rawKey });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // GET /internal/api-keys — list active keys for an org
+  router.get('/api-keys', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const orgId = getOrgId(req);
+      const keys = await apiKeyService.list(orgId);
+      res.status(200).json(keys);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // DELETE /internal/api-keys/:id — revoke a key
+  router.delete('/api-keys/:id', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const orgId = getOrgId(req);
+      const ok = await apiKeyService.revoke(req.params.id, orgId);
+      if (!ok) {
+        res.status(404).json({ error: { code: 'NOT_FOUND', message: 'API key not found' } });
+        return;
+      }
+      res.status(204).send();
     } catch (err) {
       next(err);
     }
@@ -233,6 +260,55 @@ export function internalRouter(
       if (!activity) throw new ValidationError('activity query param is required');
       const results = await graphQueryService.activityDependencyImpact(activity);
       res.status(200).json(results);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // ── Webhook management ─────────────────────────────────────────────────
+
+  // GET /internal/webhooks — list webhooks for org
+  router.get('/webhooks', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const webhooks = await webhookService.list(getOrgId(req));
+      res.status(200).json(webhooks);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // GET /internal/webhooks/active — used by notifier to fetch dispatch targets
+  router.get('/webhooks/active', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const webhooks = await webhookService.listActive(getOrgId(req));
+      res.status(200).json(webhooks);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // POST /internal/webhooks — register a new webhook
+  router.post('/webhooks', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { url, events, secret } = req.body;
+      if (!url) throw new ValidationError('url is required');
+      if (!Array.isArray(events) || events.length === 0) throw new ValidationError('events must be a non-empty array');
+      const webhook = await webhookService.create(getOrgId(req), { url, events, secret });
+      res.status(201).json(webhook);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // DELETE /internal/webhooks/:id — delete a webhook
+  router.delete('/webhooks/:id', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const ok = await webhookService.delete(req.params.id, getOrgId(req));
+      if (!ok) {
+        res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Webhook not found' } });
+        return;
+      }
+      res.status(204).send();
     } catch (err) {
       next(err);
     }

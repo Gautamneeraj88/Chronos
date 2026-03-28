@@ -13,7 +13,9 @@ services:
     volumes:
       - mongodb_data:/data/db
     healthcheck:
-      test: ['CMD', 'mongosh', '--eval', "db.adminCommand('ping')"]
+      test: ['CMD', 'mongosh', '--host', 'localhost', '--port', '27017',
+             '-u', 'chronos', '-p', 'chronos_dev', '--authenticationDatabase', 'admin',
+             '--eval', "db.adminCommand('ping')", '--quiet']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -52,7 +54,7 @@ services:
     volumes:
       - kafka-data:/var/lib/kafka/data
     healthcheck:
-      test: ['CMD-SHELL', 'kafka-topics.sh --bootstrap-server localhost:9092 --list']
+      test: ['CMD-SHELL', '/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list']
       interval: 10s
       timeout: 10s
       retries: 5

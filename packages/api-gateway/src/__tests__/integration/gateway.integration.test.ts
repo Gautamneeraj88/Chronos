@@ -26,6 +26,18 @@ function makeOrchestrator(overrides: Partial<IOrchestratorClient> = {}): IOrches
     bottlenecks:           jest.fn().mockResolvedValue([]),
     executionGraph:              jest.fn().mockResolvedValue([]),
     activityDependencyImpact:    jest.fn().mockResolvedValue([]),
+    login:      jest.fn().mockResolvedValue(null),
+    me:         jest.fn().mockResolvedValue({ id: 'user-1', email: 'a@b.com', orgId: 'org-test', role: 'admin', createdAt: new Date() }),
+    refresh:    jest.fn().mockResolvedValue({ token: 'new-token', expiresAt: new Date().toISOString(), user: { id: 'user-1' } }),
+    register:   jest.fn().mockResolvedValue({ id: 'user-2', email: 'b@b.com', orgId: 'org-test', role: 'member', createdAt: new Date() }),
+    listUsers:    jest.fn().mockResolvedValue([]),
+    deleteUser:   jest.fn().mockResolvedValue(undefined),
+    listApiKeys:  jest.fn().mockResolvedValue([]),
+    createApiKey: jest.fn().mockResolvedValue({ key: { id: 'key-1', name: 'test', orgId: 'org-test', userId: 'user-1', isActive: true, createdAt: new Date().toISOString(), lastUsedAt: null }, rawKey: 'chron_live_testkey' }),
+    revokeApiKey: jest.fn().mockResolvedValue(undefined),
+    listWebhooks: jest.fn().mockResolvedValue([]),
+    createWebhook: jest.fn().mockResolvedValue({ id: 'wh-1', orgId: 'org-test', url: 'https://example.com/hook', events: ['execution.completed'], secret: null, isActive: true, failureCount: 0, lastTriggeredAt: null, createdAt: new Date().toISOString() }),
+    deleteWebhook: jest.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }

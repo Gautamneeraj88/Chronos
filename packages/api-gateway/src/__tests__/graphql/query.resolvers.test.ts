@@ -15,6 +15,18 @@ const mockClient = {
   bottlenecks: jest.fn(),
   executionGraph: jest.fn(),
   activityDependencyImpact: jest.fn(),
+  login: jest.fn(),
+  me: jest.fn(),
+  refresh: jest.fn(),
+  register: jest.fn(),
+  listUsers: jest.fn(),
+  deleteUser: jest.fn(),
+  listApiKeys: jest.fn(),
+  createApiKey: jest.fn(),
+  revokeApiKey: jest.fn(),
+  listWebhooks: jest.fn(),
+  createWebhook: jest.fn(),
+  deleteWebhook: jest.fn(),
 };
 
 const ctx: GraphQLContext = {

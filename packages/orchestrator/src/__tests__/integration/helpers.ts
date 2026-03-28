@@ -13,6 +13,8 @@ import { ActivityRunner }           from '../../activities/ActivityRunner';
 import { WorkflowService }          from '../../services/WorkflowService';
 import { ExecutionService }         from '../../services/ExecutionService';
 import { StepPublisher }            from '../../services/StepPublisher';
+import { AuthService }              from '../../services/AuthService';
+import { IUserRepository }          from '../../repositories/IUserRepository';
 import { createApp }                from '../../app';
 
 const MONGO_URI = 'mongodb://chronos:chronos_dev@localhost:27017/chronos_test?authSource=admin';
@@ -77,6 +79,17 @@ export async function buildTestApp(): Promise<Express> {
     },
   } as unknown as StepPublisher;
 
+  // No-op auth for integration tests — auth endpoints tested separately
+  const noopUserRepo: IUserRepository = {
+    findByEmail: async () => null,
+    findById: async () => null,
+    save: async (d) => ({ id: 'test-user', email: d.email, orgId: d.orgId, role: d.role, createdAt: new Date() }),
+    count: async () => 1,
+    findAll: async () => [],
+    delete: async () => {},
+  };
+  const authService = new AuthService(noopUserRepo, 'test-secret');
+
   const workflowService = new WorkflowService(workflowRepo);
   executionService = new ExecutionService(
     executionRepo,
@@ -88,7 +101,7 @@ export async function buildTestApp(): Promise<Express> {
     timeoutStore,
   );
 
-  return createApp({ workflowService, executionService });
+  return createApp({ workflowService, executionService, authService });
 }
 
 export async function cleanDatabase(): Promise<void> {
