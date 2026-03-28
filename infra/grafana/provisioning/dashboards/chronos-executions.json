@@ -1,0 +1,86 @@
+{
+  "id": null,
+  "uid": "chronos-executions",
+  "title": "Chronos — Executions",
+  "tags": ["chronos"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "piechart",
+      "title": "Execution Status Breakdown",
+      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 10 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (status) (chronos_executions_completed_total)",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "pieType": "pie",
+        "legend": { "displayMode": "table", "placement": "right" }
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "COMPLETED vs FAILED Over Time",
+      "gridPos": { "x": 8, "y": 0, "w": 16, "h": 10 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "rate(chronos_executions_completed_total{status=\"COMPLETED\"}[5m])",
+          "legendFormat": "COMPLETED /s",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(chronos_executions_completed_total{status=\"FAILED\"}[5m])",
+          "legendFormat": "FAILED /s",
+          "refId": "B"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "fieldConfig": {
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "FAILED /s" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "COMPLETED /s" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }]
+          }
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "type": "histogram",
+      "title": "Execution Step Duration Distribution",
+      "gridPos": { "x": 0, "y": 10, "w": 24, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(rate(chronos_step_duration_ms_bucket[5m])) by (le)",
+          "legendFormat": "{{le}}",
+          "refId": "A",
+          "format": "heatmap"
+        }
+      ],
+      "options": {
+        "fillOpacity": 80,
+        "gradientMode": "none"
+      }
+    }
+  ]
+}

@@ -9,7 +9,19 @@ import {
   LogOut,
   Zap,
   Bell,
+  ExternalLink,
 } from 'lucide-react';
+
+const GRAFANA_URL = import.meta.env.VITE_GRAFANA_URL ?? 'http://localhost:3004';
+const JAEGER_URL  = import.meta.env.VITE_JAEGER_URL  ?? 'http://localhost:16686';
+
+const externalLinks = [
+  { href: GRAFANA_URL,             label: 'Grafana'   },
+  { href: 'http://localhost:9090', label: 'Prometheus' },
+  { href: JAEGER_URL,              label: 'Jaeger'    },
+  { href: 'http://localhost:15672', label: 'RabbitMQ' },
+  { href: 'http://localhost:7474',  label: 'Neo4j'    },
+];
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
 
@@ -91,6 +103,25 @@ export function Sidebar() {
           </>
         )}
       </nav>
+
+      {/* Observability external links */}
+      <div className="px-3 pb-2 border-t border-gray-800 pt-3">
+        <p className="px-2 pb-1 text-[10px] font-semibold uppercase text-gray-600 tracking-widest">
+          Observability
+        </p>
+        {externalLinks.map(({ href, label }) => (
+          <a
+            key={href}
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-2.5 px-2 py-1.5 mx-0 rounded-lg text-xs text-gray-500 hover:bg-gray-800 hover:text-gray-300 transition-colors"
+          >
+            <ExternalLink size={11} className="shrink-0" />
+            {label}
+          </a>
+        ))}
+      </div>
 
       {/* Notification bell */}
       <NavLink

@@ -14,27 +14,53 @@ export interface ILogger {
 export function createLogger(serviceName: string): ILogger {
   const isProduction = process.env.NODE_ENV === 'production';
 
+  const transports: winston.transport[] = [
+    new winston.transports.Console({
+      format: isProduction
+        ? // Production: structured JSON — log aggregators parse this
+          winston.format.combine(
+            winston.format.timestamp(),
+            winston.format.errors({ stack: true }),
+            winston.format.json(),
+          )
+        : // Development: human-readable coloured output
+          winston.format.combine(
+            winston.format.timestamp({ format: 'HH:mm:ss' }),
+            winston.format.errors({ stack: true }),
+            winston.format.colorize(),
+            winston.format.printf(({ timestamp, level, service, message, ...meta }) => {
+              const metaStr = Object.keys(meta).length ? ' ' + JSON.stringify(meta) : '';
+              return `${timestamp} [${service}] ${level}: ${message}${metaStr}`;
+            }),
+          ),
+    }),
+  ];
+
+  // Ship logs directly to Loki when LOKI_URL is configured (no Promtail sidecar needed)
+  if (process.env.LOKI_URL) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const LokiTransport = require('winston-loki');
+    transports.push(
+      new LokiTransport({
+        host: process.env.LOKI_URL,
+        labels: { service: serviceName },
+        json: true,
+        format: winston.format.combine(
+          winston.format.timestamp(),
+          winston.format.json(),
+        ),
+        replaceTimestamp: false,
+        onConnectionError: () => {
+          // Silently ignore Loki connection errors — logging should never crash a service
+        },
+      }),
+    );
+  }
+
   const logger = winston.createLogger({
     level: process.env.LOG_LEVEL ?? 'info',
     defaultMeta: { service: serviceName },
-    format: isProduction
-      ? // INFO: Production: structured JSON — log aggregators parse this
-        winston.format.combine(
-          winston.format.timestamp(),
-          winston.format.errors({ stack: true }),
-          winston.format.json(),
-        )
-      : // INFO: Development: human-readable coloured output
-        winston.format.combine(
-          winston.format.timestamp({ format: 'HH:mm:ss' }),
-          winston.format.errors({ stack: true }),
-          winston.format.colorize(),
-          winston.format.printf(({ timestamp, level, service, message, ...meta }) => {
-            const metaStr = Object.keys(meta).length ? ' ' + JSON.stringify(meta) : '';
-            return `${timestamp} [${service}] ${level}: ${message}${metaStr}`;
-          }),
-        ),
-    transports: [new winston.transports.Console()],
+    transports,
   });
 
   return {

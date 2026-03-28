@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { UnauthorizedError } from '@chronos/shared';
 import { IOrchestratorClient } from '../http/IOrchestratorClient';
+import { authFailures } from '../metrics';
 
 export interface AuthUser {
   userId: string;
@@ -36,6 +37,7 @@ export function authMiddleware(orchestratorClient: IOrchestratorClient) {
     const authHeader = req.headers.authorization;
 
     if (!authHeader?.startsWith('Bearer ')) {
+      authFailures.inc({ reason: 'missing_token' });
       return next(new UnauthorizedError('Missing Bearer token'));
     }
 
@@ -53,12 +55,14 @@ export function authMiddleware(orchestratorClient: IOrchestratorClient) {
       // API key path (legacy + service-to-service)
       const result = await orchestratorClient.validateApiKey(rawToken);
       if (!result) {
+        authFailures.inc({ reason: 'invalid_api_key' });
         return next(new UnauthorizedError('Invalid or revoked API key'));
       }
       req.user = { userId: result.userId, orgId: result.orgId };
       req.orgId = result.orgId;
       return next();
     } catch {
+      authFailures.inc({ reason: 'service_unavailable' });
       return next(new UnauthorizedError('Auth service unavailable'));
     }
   };

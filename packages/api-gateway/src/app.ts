@@ -1,10 +1,11 @@
-import express, { Express } from 'express';
+import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { GatewayConfig } from './config/config';
 import { requestIdMiddleware, rateLimitMiddleware, errorHandler } from './middleware';
 import { healthRouter, workflowRouter, executionRouter, authRouter, apiKeyRouter, webhookRouter } from './routes';
 import { IOrchestratorClient } from './http';
 import { createYogaMiddleware } from './graphql';
+import { register, httpRequestsTotal, httpRequestDuration } from './metrics';
 
 // Dependencies the app needs injected (so tests can pass mocks)
 export interface AppDependencies {
@@ -22,6 +23,24 @@ export function createApp(config: GatewayConfig, deps: AppDependencies): Express
 
   // Parse JSON bodies
   app.use(express.json());
+
+  // Prometheus metrics — no auth required, scraped by Prometheus
+  app.get('/metrics', async (_req, res) => {
+    res.set('Content-Type', register.contentType);
+    res.end(await register.metrics());
+  });
+
+  // Request instrumentation — track rate and latency per route
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const start = Date.now();
+    const route = req.path;
+    res.on('finish', () => {
+      const duration = Date.now() - start;
+      httpRequestsTotal.inc({ method: req.method, route, status: String(res.statusCode) });
+      httpRequestDuration.observe({ method: req.method, route }, duration);
+    });
+    next();
+  });
 
   // Attach a unique request ID to every request
   app.use(requestIdMiddleware);
