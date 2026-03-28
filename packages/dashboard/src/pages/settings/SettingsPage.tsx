@@ -1,11 +1,19 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Users, Building2, Webhook, ShieldAlert, Plus, Trash2 } from 'lucide-react';
+import {
+  Users, Building2, Webhook, ShieldAlert, Plus, Trash2,
+  Monitor, Eye, EyeOff, Copy, Check, ExternalLink,
+} from 'lucide-react';
 import { listUsers, registerUser, deleteUser } from '../../api/auth';
 import { listApiKeys, revokeApiKey } from '../../api/apikeys';
 import { listWebhooks, createWebhook, deleteWebhook } from '../../api/webhooks';
 import { useAuth } from '../../context/AuthContext';
+import {
+  useObservability,
+  ObservabilityConfig,
+  OBS_DEFAULTS,
+} from '../../context/ObservabilityContext';
 import { Card, CardHeader, CardBody } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -14,21 +22,203 @@ import { Badge } from '../../components/ui/Badge';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Spinner } from '../../components/ui/Spinner';
 
-type Tab = 'org' | 'users' | 'webhooks' | 'danger';
+type Tab = 'org' | 'users' | 'webhooks' | 'observability' | 'danger';
 
 const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
-  { key: 'org',      label: 'Organisation', icon: Building2 },
-  { key: 'users',    label: 'Users',        icon: Users },
-  { key: 'webhooks', label: 'Webhooks',     icon: Webhook },
-  { key: 'danger',   label: 'Danger Zone',  icon: ShieldAlert },
+  { key: 'org',           label: 'Organisation', icon: Building2  },
+  { key: 'users',         label: 'Users',        icon: Users      },
+  { key: 'webhooks',      label: 'Webhooks',     icon: Webhook    },
+  { key: 'observability', label: 'Observability',icon: Monitor    },
+  { key: 'danger',        label: 'Danger Zone',  icon: ShieldAlert},
 ];
 
-const WEBHOOK_EVENTS = [
-  'execution.completed',
-  'execution.failed',
-  '*',
+const WEBHOOK_EVENTS = ['execution.completed', 'execution.failed', '*'];
+
+// ── Observability tool definitions ───────────────────────────────────────────
+interface ToolDef {
+  key: keyof ObservabilityConfig;
+  label: string;
+  hasCredentials: boolean;
+  note?: string;
+}
+
+const TOOLS: ToolDef[] = [
+  {
+    key: 'grafana',
+    label: 'Grafana',
+    hasCredentials: false,
+    note: 'Anonymous viewer access is pre-configured — no login required.',
+  },
+  {
+    key: 'prometheus',
+    label: 'Prometheus',
+    hasCredentials: false,
+    note: 'No authentication in development mode.',
+  },
+  {
+    key: 'jaeger',
+    label: 'Jaeger',
+    hasCredentials: false,
+    note: 'No authentication in development mode.',
+  },
+  {
+    key: 'rabbitmq',
+    label: 'RabbitMQ Management',
+    hasCredentials: true,
+  },
+  {
+    key: 'neo4j',
+    label: 'Neo4j Browser',
+    hasCredentials: true,
+    note: 'Username and password are pre-filled with dev defaults.',
+  },
 ];
 
+// ── Copy button ───────────────────────────────────────────────────────────────
+function CopyButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(value).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  return (
+    <button
+      onClick={copy}
+      className="p-1 rounded text-gray-400 hover:text-gray-700 transition-colors"
+      title="Copy"
+    >
+      {copied ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
+    </button>
+  );
+}
+
+// ── Observability tab ─────────────────────────────────────────────────────────
+function ObservabilityTab() {
+  const { config, save, reset } = useObservability();
+  const [draft, setDraft] = useState<ObservabilityConfig>(config);
+  const [showPass, setShowPass] = useState<Record<string, boolean>>({});
+
+  const setField = (tool: keyof ObservabilityConfig, field: string, value: string) => {
+    setDraft((prev) => ({
+      ...prev,
+      [tool]: { ...prev[tool], [field]: value },
+    }));
+  };
+
+  const handleSave = () => {
+    save(draft);
+    toast.success('Observability settings saved');
+  };
+
+  const handleReset = () => {
+    setDraft(OBS_DEFAULTS);
+    reset();
+    toast.success('Reset to defaults');
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-gray-500">
+        Configure URLs and credentials for external monitoring tools.
+        Settings are saved in this browser only — no credentials are sent to the server.
+      </p>
+
+      {TOOLS.map(({ key, label, hasCredentials, note }) => {
+        const tool = draft[key];
+        const saved = config[key];
+        return (
+          <Card key={key}>
+            <CardBody className="flex flex-col gap-3">
+              {/* Header row */}
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-gray-800">{label}</p>
+                <a
+                  href={saved.url || '#'}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1 text-xs text-brand-600 hover:underline"
+                >
+                  Open <ExternalLink size={11} />
+                </a>
+              </div>
+
+              {note && (
+                <p className="text-xs text-gray-400 -mt-1">{note}</p>
+              )}
+
+              {/* URL */}
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <Input
+                    label="URL"
+                    type="url"
+                    value={tool.url}
+                    onChange={(e) => setField(key, 'url', e.target.value)}
+                  />
+                </div>
+                <div className="mt-5">
+                  <CopyButton value={tool.url} />
+                </div>
+              </div>
+
+              {/* Credentials — only for tools that need them */}
+              {hasCredentials && (
+                <div className="flex gap-3">
+                  <div className="flex-1 flex items-center gap-2">
+                    <div className="flex-1">
+                      <Input
+                        label="Username"
+                        value={tool.username ?? ''}
+                        onChange={(e) => setField(key, 'username', e.target.value)}
+                      />
+                    </div>
+                    <div className="mt-5">
+                      <CopyButton value={tool.username ?? ''} />
+                    </div>
+                  </div>
+
+                  <div className="flex-1 flex items-center gap-2">
+                    <div className="flex-1 relative">
+                      <Input
+                        label="Password"
+                        type={showPass[key] ? 'text' : 'password'}
+                        value={tool.password ?? ''}
+                        onChange={(e) => setField(key, 'password', e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPass((p) => ({ ...p, [key]: !p[key] }))}
+                        className="absolute right-8 bottom-2 text-gray-400 hover:text-gray-600"
+                      >
+                        {showPass[key] ? <EyeOff size={13} /> : <Eye size={13} />}
+                      </button>
+                    </div>
+                    <div className="mt-5">
+                      <CopyButton value={tool.password ?? ''} />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardBody>
+          </Card>
+        );
+      })}
+
+      <div className="flex justify-between items-center pt-1">
+        <Button variant="secondary" onClick={handleReset}>
+          Reset to defaults
+        </Button>
+        <Button onClick={handleSave}>
+          Save Changes
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 export function SettingsPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -323,6 +513,9 @@ export function SettingsPage() {
           )}
         </>
       )}
+
+      {/* ── Observability ─────────────────────────────────────────────────── */}
+      {tab === 'observability' && <ObservabilityTab />}
 
       {/* ── Danger Zone ──────────────────────────────────────────────────── */}
       {tab === 'danger' && (

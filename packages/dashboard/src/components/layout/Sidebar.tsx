@@ -11,19 +11,9 @@ import {
   Bell,
   ExternalLink,
 } from 'lucide-react';
-
-const GRAFANA_URL = import.meta.env.VITE_GRAFANA_URL ?? 'http://localhost:3004';
-const JAEGER_URL  = import.meta.env.VITE_JAEGER_URL  ?? 'http://localhost:16686';
-
-const externalLinks = [
-  { href: GRAFANA_URL,             label: 'Grafana'   },
-  { href: 'http://localhost:9090', label: 'Prometheus' },
-  { href: JAEGER_URL,              label: 'Jaeger'    },
-  { href: 'http://localhost:15672', label: 'RabbitMQ' },
-  { href: 'http://localhost:7474',  label: 'Neo4j'    },
-];
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
+import { useObservability } from '../../context/ObservabilityContext';
 
 const navItems = [
   { to: '/workflows',  label: 'Workflows',     Icon: GitBranchPlus },
@@ -33,8 +23,8 @@ const navItems = [
 ];
 
 const adminItems = [
-  { to: '/api-keys',  label: 'API Keys',  Icon: KeyRound  },
-  { to: '/settings',  label: 'Settings',  Icon: Settings  },
+  { to: '/api-keys',  label: 'API Keys',  Icon: KeyRound },
+  { to: '/settings',  label: 'Settings',  Icon: Settings },
 ];
 
 function NavItem({ to, label, Icon }: { to: string; label: string; Icon: React.ElementType }) {
@@ -71,9 +61,18 @@ function UserAvatar({ email }: { email: string }) {
 export function Sidebar() {
   const { user, isAdmin, logout } = useAuth();
   const { unread } = useNotifications();
+  const { config } = useObservability();
+
+  const externalLinks = [
+    { href: config.grafana.url,    label: 'Grafana'    },
+    { href: config.prometheus.url, label: 'Prometheus' },
+    { href: config.jaeger.url,     label: 'Jaeger'     },
+    { href: config.rabbitmq.url,   label: 'RabbitMQ'   },
+    { href: config.neo4j.url,      label: 'Neo4j'      },
+  ];
 
   return (
-    <aside className="w-[220px] shrink-0 flex flex-col bg-gray-900 min-h-screen">
+    <aside className="w-[220px] shrink-0 flex flex-col bg-gray-900 h-screen sticky top-0">
       {/* Logo */}
       <div className="flex items-center gap-2.5 px-5 py-5 border-b border-gray-800">
         <div className="w-7 h-7 rounded-lg bg-brand-600 flex items-center justify-center shrink-0">
@@ -104,18 +103,18 @@ export function Sidebar() {
         )}
       </nav>
 
-      {/* Observability external links */}
+      {/* Observability external links — URLs come from Settings > Observability */}
       <div className="px-3 pb-2 border-t border-gray-800 pt-3">
         <p className="px-2 pb-1 text-[10px] font-semibold uppercase text-gray-600 tracking-widest">
           Observability
         </p>
         {externalLinks.map(({ href, label }) => (
           <a
-            key={href}
+            key={label}
             href={href}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-2.5 px-2 py-1.5 mx-0 rounded-lg text-xs text-gray-500 hover:bg-gray-800 hover:text-gray-300 transition-colors"
+            className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-xs text-gray-500 hover:bg-gray-800 hover:text-gray-300 transition-colors"
           >
             <ExternalLink size={11} className="shrink-0" />
             {label}

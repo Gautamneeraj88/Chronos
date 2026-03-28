@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
 import { AuthProvider } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
+import { ObservabilityProvider } from './context/ObservabilityContext';
 import { AppRouter } from './router';
 
 const queryClient = new QueryClient({
@@ -17,6 +18,7 @@ export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
+        <ObservabilityProvider>
         <NotificationProvider>
           <AppRouter />
           <Toaster
@@ -28,6 +30,7 @@ export function App() {
             }}
           />
         </NotificationProvider>
+        </ObservabilityProvider>
       </AuthProvider>
     </QueryClientProvider>
   );
