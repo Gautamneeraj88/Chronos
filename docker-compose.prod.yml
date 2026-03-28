@@ -1,0 +1,338 @@
+version: '3.8'
+
+services:
+  # ── Infrastructure ───────────────────────────────────────────────────────────
+  mongodb:
+    image: mongo:7
+    container_name: chronos-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME:-chronos}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-changeme}
+      MONGO_INITDB_DATABASE: chronos
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test:
+        - CMD
+        - mongosh
+        - '--host'
+        - localhost
+        - '--port'
+        - '27017'
+        - '-u'
+        - ${MONGO_USERNAME:-chronos}
+        - '-p'
+        - ${MONGO_PASSWORD:-changeme}
+        - '--authenticationDatabase'
+        - admin
+        - '--eval'
+        - "db.adminCommand('ping')"
+        - '--quiet'
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - chronos-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: chronos-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-changeme}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD:-changeme}', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - chronos-network
+
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: chronos-kafka
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://chronos-kafka:9092
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@chronos-kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKAJS_NO_PARTITIONER_WARNING: '1'
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - chronos-network
+
+  kafka-init:
+    image: apache/kafka:3.7.0
+    container_name: chronos-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    command: >
+      bash -c "
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server chronos-kafka:9092 --create --if-not-exists --topic chronos.step.execute --partitions 6 --replication-factor 1 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server chronos-kafka:9092 --create --if-not-exists --topic chronos.step.result --partitions 6 --replication-factor 1 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server chronos-kafka:9092 --create --if-not-exists --topic chronos.step.dlq --partitions 6 --replication-factor 1 &&
+        echo 'Kafka topics created successfully'
+      "
+    networks:
+      - chronos-network
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: chronos-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-chronos}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-changeme}
+      RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE:-chronos-secret-cookie}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', 'ping']
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    networks:
+      - chronos-network
+
+  neo4j:
+    image: neo4j:5.18
+    container_name: chronos-neo4j
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: ${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD:-changeme}
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    healthcheck:
+      test:
+        - CMD
+        - cypher-shell
+        - '-u'
+        - ${NEO4J_USERNAME:-neo4j}
+        - '-p'
+        - ${NEO4J_PASSWORD:-changeme}
+        - RETURN 1
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks:
+      - chronos-network
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    container_name: chronos-jaeger
+    restart: unless-stopped
+    environment:
+      COLLECTOR_OTLP_ENABLED: 'true'
+    networks:
+      - chronos-network
+
+  prometheus:
+    image: ghcr.io/gautamneeraj88/chronos/prometheus:${CHRONOS_VERSION:-latest}
+    container_name: chronos-prometheus
+    restart: unless-stopped
+    volumes:
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    healthcheck:
+      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:9090/-/healthy']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - chronos-network
+
+  grafana:
+    image: ghcr.io/gautamneeraj88/chronos/grafana:${CHRONOS_VERSION:-latest}
+    container_name: chronos-grafana
+    restart: unless-stopped
+    ports:
+      - '${GRAFANA_PORT:-3004}:3004'
+    environment:
+      GF_SERVER_HTTP_PORT: 3004
+      GF_SECURITY_ALLOW_EMBEDDING: 'true'
+      GF_AUTH_ANONYMOUS_ENABLED: 'true'
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-changeme}
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - chronos-network
+
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: chronos-loki
+    restart: unless-stopped
+    volumes:
+      - loki_data:/loki
+    networks:
+      - chronos-network
+
+  # ── Chronos Services ─────────────────────────────────────────────────────────
+  orchestrator:
+    image: ghcr.io/gautamneeraj88/chronos/orchestrator:${CHRONOS_VERSION:-latest}
+    container_name: chronos-orchestrator
+    restart: unless-stopped
+    ports:
+      - '${ORCHESTRATOR_PORT:-3001}:3001'
+    environment:
+      NODE_ENV: production
+      ORCHESTRATOR_PORT: 3001
+      MONGODB_URI: mongodb://${MONGO_USERNAME:-chronos}:${MONGO_PASSWORD:-changeme}@chronos-mongodb:27017/chronos?authSource=admin
+      REDIS_URL: redis://:${REDIS_PASSWORD:-changeme}@chronos-redis:6379
+      KAFKA_BROKERS: chronos-kafka:9092
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-chronos}:${RABBITMQ_PASSWORD:-changeme}@chronos-rabbitmq:5672
+      NEO4J_URI: bolt://chronos-neo4j:7687
+      NEO4J_USERNAME: ${NEO4J_USERNAME:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-changeme}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://chronos-jaeger:4318/v1/traces
+      LOKI_URL: http://chronos-loki:3100
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@chronos.dev}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-changeme}
+      BOOTSTRAP_ORG_ID: ${BOOTSTRAP_ORG_ID:-default-org}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:3001/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - chronos-network
+
+  worker:
+    image: ghcr.io/gautamneeraj88/chronos/worker:${CHRONOS_VERSION:-latest}
+    container_name: chronos-worker
+    restart: unless-stopped
+    ports:
+      - '${WORKER_PORT:-3002}:3002'
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      KAFKA_BROKERS: chronos-kafka:9092
+      LOKI_URL: http://chronos-loki:3100
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://chronos-jaeger:4318/v1/traces
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:3002/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - chronos-network
+
+  gateway:
+    image: ghcr.io/gautamneeraj88/chronos/api-gateway:${CHRONOS_VERSION:-latest}
+    container_name: chronos-gateway
+    restart: unless-stopped
+    ports:
+      - '${GATEWAY_PORT:-3000}:3000'
+    environment:
+      NODE_ENV: production
+      GATEWAY_PORT: 3000
+      ORCHESTRATOR_URL: http://chronos-orchestrator:3001
+      REDIS_URL: redis://:${REDIS_PASSWORD:-changeme}@chronos-redis:6379
+      LOKI_URL: http://chronos-loki:3100
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://chronos-jaeger:4318/v1/traces
+    depends_on:
+      orchestrator:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:3000/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - chronos-network
+
+  notifier:
+    image: ghcr.io/gautamneeraj88/chronos/notifier:${CHRONOS_VERSION:-latest}
+    container_name: chronos-notifier
+    restart: unless-stopped
+    ports:
+      - '${NOTIFIER_PORT:-3003}:3003'
+    environment:
+      NODE_ENV: production
+      PORT: 3003
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-chronos}:${RABBITMQ_PASSWORD:-changeme}@chronos-rabbitmq:5672
+      DASHBOARD_URL: http://localhost:${DASHBOARD_PORT:-8080}
+      LOKI_URL: http://chronos-loki:3100
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:3003/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - chronos-network
+
+  dashboard:
+    image: ghcr.io/gautamneeraj88/chronos/dashboard:${CHRONOS_VERSION:-latest}
+    container_name: chronos-dashboard
+    restart: unless-stopped
+    ports:
+      - '${DASHBOARD_PORT:-8080}:80'
+    depends_on:
+      gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:80/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - chronos-network
+
+networks:
+  chronos-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  redis_data:
+  kafka_data:
+  rabbitmq_data:
+  neo4j_data:
+  neo4j_logs:
+  prometheus_data:
+  grafana_data:
+  loki_data:
