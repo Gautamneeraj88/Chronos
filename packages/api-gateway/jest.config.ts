@@ -5,5 +5,6 @@ export default {
   testMatch: ['**/*.test.ts'],
   testPathIgnorePatterns: ['/node_modules/', '\\.integration\\.test\\.ts$'],
   collectCoverageFrom: ['src/**/*.ts', '!src/server.ts'],
-  setupFiles: ['<rootDir>/src/__tests__/setup.ts'], // ← add this
+  setupFiles: ['<rootDir>/src/__tests__/setup.ts'],
+  forceExit: true,
 };

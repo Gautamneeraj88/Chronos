@@ -10,6 +10,10 @@ const ConfigSchema = z.object({
   neo4jUri:      z.string().default('bolt://localhost:7687'),
   neo4jUsername: z.string().default('neo4j'),
   neo4jPassword: z.string().default('chronos_dev'),
+  jwtSecret:              z.string().default('dev_secret_change_in_prod'),
+  bootstrapAdminEmail:    z.string().default(''),
+  bootstrapAdminPassword: z.string().default(''),
+  bootstrapOrgId:         z.string().default('default-org'),
 });
 
 export type OrchestratorConfig = z.infer<typeof ConfigSchema>;
@@ -25,6 +29,10 @@ export function loadConfig(): OrchestratorConfig {
     neo4jUri:      process.env.NEO4J_URI,
     neo4jUsername: process.env.NEO4J_USERNAME,
     neo4jPassword: process.env.NEO4J_PASSWORD,
+    jwtSecret:              process.env.JWT_SECRET,
+    bootstrapAdminEmail:    process.env.BOOTSTRAP_ADMIN_EMAIL,
+    bootstrapAdminPassword: process.env.BOOTSTRAP_ADMIN_PASSWORD,
+    bootstrapOrgId:         process.env.BOOTSTRAP_ORG_ID,
   });
 
    if (!result.success) {

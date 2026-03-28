@@ -1,4 +1,4 @@
-import { WorkflowDefinition, Execution, DomainEvent, CreateWorkflowInput } from '@chronos/shared';
+import { WorkflowDefinition, Execution, DomainEvent, CreateWorkflowInput, User, AuthSession } from '@chronos/shared';
 import {
   WorkflowMatch,
   StepFailureStat,
@@ -33,4 +33,42 @@ export interface IOrchestratorClient {
   bottlenecks(orgId: string): Promise<StepBottleneck[]>;
   executionGraph(executionId: string, orgId: string): Promise<StepExecutionRecord[]>;
   activityDependencyImpact(activityName: string, orgId: string): Promise<ActivityImpact[]>;
+  // Auth methods
+  login(email: string, password: string): Promise<AuthSession | null>;
+  me(token: string): Promise<User>;
+  refresh(token: string): Promise<AuthSession>;
+  register(email: string, password: string, role: string, orgId: string, token: string): Promise<User>;
+  listUsers(orgId: string, token: string): Promise<User[]>;
+  deleteUser(id: string, token: string): Promise<void>;
+  // API key management
+  listApiKeys(orgId: string): Promise<ApiKeySummary[]>;
+  createApiKey(orgId: string, userId: string, name: string): Promise<{ key: ApiKeySummary; rawKey: string }>;
+  revokeApiKey(id: string, orgId: string): Promise<void>;
+  // Webhook management
+  listWebhooks(orgId: string): Promise<WebhookSummary[]>;
+  createWebhook(orgId: string, payload: { url: string; events: string[]; secret?: string }): Promise<WebhookSummary>;
+  deleteWebhook(id: string, orgId: string): Promise<void>;
+}
+
+export interface ApiKeySummary {
+  id: string;
+  name: string;
+  orgId: string;
+  userId: string;
+  keyPrefix: string;
+  isActive: boolean;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+export interface WebhookSummary {
+  id: string;
+  orgId: string;
+  url: string;
+  events: string[];
+  secret: string | null;
+  isActive: boolean;
+  failureCount: number;
+  lastTriggeredAt: string | null;
+  createdAt: string;
 }

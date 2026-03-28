@@ -27,7 +27,40 @@ export interface ValidatedApiKey {
   userId: string;
 }
 
+export interface ApiKeySummary {
+  id: string;
+  name: string;
+  orgId: string;
+  userId: string;
+  keyPrefix: string;
+  isActive: boolean;
+  createdAt: Date;
+  lastUsedAt: Date | null;
+}
+
 export class ApiKeyService {
+  async list(orgId: string): Promise<ApiKeySummary[]> {
+    const records = await ApiKeyModel.find({ orgId, isActive: true }).sort({ createdAt: -1 });
+    return records.map(r => ({
+      id: (r._id as { toString(): string }).toString(),
+      name: r.name,
+      orgId: r.orgId,
+      userId: r.userId,
+      keyPrefix: r.keyPrefix,
+      isActive: r.isActive,
+      createdAt: r.createdAt,
+      lastUsedAt: r.lastUsedAt,
+    }));
+  }
+
+  async revoke(id: string, orgId: string): Promise<boolean> {
+    const result = await ApiKeyModel.updateOne(
+      { _id: id, orgId },
+      { isActive: false },
+    );
+    logger.info('API key revoked', { id, orgId });
+    return result.modifiedCount > 0;
+  }
   async create(orgId: string, userId: string, name: string): Promise<CreatedApiKey> {
     const raw = KEY_PREFIX + randomBytes(24).toString('hex');
     const hashed = await bcrypt.hash(raw, SALT_ROUNDS);

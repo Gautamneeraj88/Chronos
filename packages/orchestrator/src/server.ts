@@ -24,6 +24,8 @@ import { Neo4jClient } from '@chronos/neo4j';
 import { NotificationPublisher } from './services/NotificationPublisher';
 import { WorkflowGraphService } from './services/WorkflowGraphService';
 import { GraphQueryService } from './services/GraphQueryService';
+import { AuthService } from './services/AuthService';
+import { MongoUserRepository } from './repositories/UserRepository';
 
 async function bootstrap(): Promise<void> {
   const config = loadConfig();
@@ -79,6 +81,8 @@ async function bootstrap(): Promise<void> {
   }
 
   // 5. Instantiate application services
+  const userRepo = new MongoUserRepository();
+  const authService = new AuthService(userRepo, config.jwtSecret);
   const workflowService = new WorkflowService(workflowRepo, graphService);
   const executionService = new ExecutionService(
     executionRepo,
@@ -92,6 +96,13 @@ async function bootstrap(): Promise<void> {
     graphService,
   );
 
+  // 5b. Bootstrap first admin if no users exist (idempotent, safe on every restart)
+  await authService.bootstrapIfEmpty(
+    config.bootstrapAdminEmail,
+    config.bootstrapAdminPassword,
+    config.bootstrapOrgId,
+  );
+
   // 6. Recovery — MUST complete before accepting requests
   const recoveryEngine = new RecoveryEngine(
     executionRepo,
@@ -103,7 +114,7 @@ async function bootstrap(): Promise<void> {
   await recoveryEngine.recoverInFlightExecutions();
 
   // 7. Create and start Express app — before consumer so health checks pass immediately
-  const app = createApp({ workflowService, executionService, graphQueryService });
+  const app = createApp({ workflowService, executionService, graphQueryService, authService });
   app.listen(config.port, () => {
     logger.info('Orchestrator running', {
       port: config.port,
