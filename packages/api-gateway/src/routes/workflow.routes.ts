@@ -7,7 +7,32 @@ export function workflowRouter(orchestrator: IOrchestratorClient): Router {
   const router = Router();
   const protect = authMiddleware(orchestrator);
 
-  // POST /workflows - register a new workflow definition
+  /**
+   * @openapi
+   * /workflows:
+   *   post:
+   *     summary: Register a new workflow definition
+   *     tags: [Workflows]
+   *     security:
+   *       - BearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             $ref: '#/components/schemas/CreateWorkflowInput'
+   *     responses:
+   *       201:
+   *         description: Workflow created
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Workflow'
+   *       400:
+   *         description: Validation error
+   *       401:
+   *         description: Unauthorized
+   */
   router.post('/', protect, async (req: Request, res: Response, next: NextFunction) => {
     try {
       const parsed = CreateWorkflowSchema.safeParse(req.body);
@@ -26,7 +51,26 @@ export function workflowRouter(orchestrator: IOrchestratorClient): Router {
     }
   });
 
-  // GET /workflows - list all definitions
+  /**
+   * @openapi
+   * /workflows:
+   *   get:
+   *     summary: List all workflow definitions for the org
+   *     tags: [Workflows]
+   *     security:
+   *       - BearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Array of workflow definitions
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: array
+   *               items:
+   *                 $ref: '#/components/schemas/Workflow'
+   *       401:
+   *         description: Unauthorized
+   */
   router.get('/', protect, async (req: Request, res: Response, next: NextFunction) => {
     try {
       const workflows = await orchestrator.listWorkflows(req.orgId!);
@@ -36,7 +80,32 @@ export function workflowRouter(orchestrator: IOrchestratorClient): Router {
     }
   });
 
-  // GET /workflows/:id - get one definition
+  /**
+   * @openapi
+   * /workflows/{id}:
+   *   get:
+   *     summary: Get a workflow definition by ID
+   *     tags: [Workflows]
+   *     security:
+   *       - BearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: Workflow definition
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Workflow'
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Not found
+   */
   router.get('/:id', protect, async (req: Request, res: Response, next: NextFunction) => {
     try {
       const workflow = await orchestrator.getWorkflow(req.params.id, req.orgId!);
@@ -46,7 +115,43 @@ export function workflowRouter(orchestrator: IOrchestratorClient): Router {
     }
   });
 
-  // POST /workflows/:id/executions - trigger an execution
+  /**
+   * @openapi
+   * /workflows/{id}/executions:
+   *   post:
+   *     summary: Trigger an execution for a workflow
+   *     tags: [Workflows]
+   *     security:
+   *       - BearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Workflow ID
+   *     requestBody:
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               input:
+   *                 type: object
+   *                 additionalProperties: true
+   *                 example: { orderId: "ORD-001", amount: 99.99 }
+   *     responses:
+   *       201:
+   *         description: Execution started
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Execution'
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Workflow not found
+   */
   router.post('/:id/executions', protect, async (req: Request, res: Response, next: NextFunction) => {
     try {
       const parsed = TriggerExecutionSchema.safeParse(req.body);
