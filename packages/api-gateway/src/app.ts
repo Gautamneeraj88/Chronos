@@ -6,6 +6,7 @@ import { healthRouter, workflowRouter, executionRouter, authRouter, apiKeyRouter
 import { IOrchestratorClient } from './http';
 import { createYogaMiddleware } from './graphql';
 import { register, httpRequestsTotal, httpRequestDuration } from './metrics';
+import { openapiSpec, swaggerUiMiddleware } from './openapi';
 
 // Dependencies the app needs injected (so tests can pass mocks)
 export interface AppDependencies {
@@ -47,6 +48,12 @@ export function createApp(config: GatewayConfig, deps: AppDependencies): Express
 
   // Rate limiting - before auth so bots get blocked cheaply
   app.use(rateLimitMiddleware(config));
+
+  // OpenAPI docs — raw JSON first (must precede swagger-ui which captures all /docs/* paths)
+  // Swagger UI at /docs, raw spec at /openapi.json
+  // In production you may want to guard this behind auth or disable it entirely.
+  app.get('/openapi.json', (_req, res) => res.json(openapiSpec));
+  app.use('/docs', swaggerUiMiddleware);
 
   // Auth routes — login is public, others use auth middleware internally
   app.use('/auth', authRouter(deps.orchestratorClient));

@@ -6,7 +6,20 @@ export function webhookRouter(orchestratorClient: IOrchestratorClient): Router {
   const router = Router();
   const auth = authMiddleware(orchestratorClient);
 
-  // GET /webhooks — list all webhooks for the authenticated org
+  /**
+   * @openapi
+   * /webhooks:
+   *   get:
+   *     summary: List all webhooks for the org
+   *     tags: [Webhooks]
+   *     security:
+   *       - BearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Array of webhooks
+   *       401:
+   *         description: Unauthorized
+   */
   router.get('/', auth, async (req: Request, res: Response, next: NextFunction) => {
     try {
       const webhooks = await orchestratorClient.listWebhooks(req.orgId!);
@@ -16,7 +29,39 @@ export function webhookRouter(orchestratorClient: IOrchestratorClient): Router {
     }
   });
 
-  // POST /webhooks — register a new webhook
+  /**
+   * @openapi
+   * /webhooks:
+   *   post:
+   *     summary: Register a new webhook
+   *     tags: [Webhooks]
+   *     security:
+   *       - BearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [url, events]
+   *             properties:
+   *               url:
+   *                 type: string
+   *                 example: https://example.com/hooks/chronos
+   *               events:
+   *                 type: array
+   *                 items:
+   *                   type: string
+   *                   enum: [execution.started, execution.completed, execution.compensated, execution.failed, step.completed, step.failed]
+   *               secret:
+   *                 type: string
+   *                 description: Optional HMAC-SHA256 signing secret
+   *     responses:
+   *       201:
+   *         description: Webhook registered
+   *       401:
+   *         description: Unauthorized
+   */
   router.post('/', auth, async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { url, events, secret } = req.body as { url: string; events: string[]; secret?: string };
@@ -27,7 +72,26 @@ export function webhookRouter(orchestratorClient: IOrchestratorClient): Router {
     }
   });
 
-  // DELETE /webhooks/:id — remove a webhook
+  /**
+   * @openapi
+   * /webhooks/{id}:
+   *   delete:
+   *     summary: Remove a webhook
+   *     tags: [Webhooks]
+   *     security:
+   *       - BearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       204:
+   *         description: Webhook deleted
+   *       401:
+   *         description: Unauthorized
+   */
   router.delete('/:id', auth, async (req: Request, res: Response, next: NextFunction) => {
     try {
       await orchestratorClient.deleteWebhook(req.params.id, req.orgId!);

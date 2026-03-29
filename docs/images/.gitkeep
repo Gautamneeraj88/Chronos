@@ -1,0 +1,8 @@
+# Add dashboard screenshots here — see README.md for which screenshots to take.
+# Files expected:
+#   workflows.png         — Workflow list page
+#   workflow-detail.png   — Workflow detail with step DAG
+#   execution-detail.png  — Execution detail with live timeline
+#   graph-explorer.png    — Neo4j graph explorer page
+#   grafana-metrics.png   — Grafana metrics panels
+#   login.png             — Login page
