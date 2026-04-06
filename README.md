@@ -46,24 +46,31 @@ Chronos lets you define multi-step workflows with automatic retry, compensation 
 
 - Docker 24+ and Docker Compose v2, **or** Podman 4+ and podman-compose 1.1+
 
-### One-command deploy
+### Deploy in 5 steps
+
+**1. Download the compose file**
 
 ```bash
-# 1. Download the compose file and example env
 curl -O https://raw.githubusercontent.com/gautamneeraj88/chronos/main/docker-compose.prod.yml
-curl -O https://raw.githubusercontent.com/gautamneeraj88/chronos/main/.env.example
-cp .env.example .env
 ```
 
-Edit `.env` — at minimum set these three:
+**2. Create your `.env` — generate real secrets, do not skip this**
 
 ```bash
-JWT_SECRET=your-super-secret-key-at-least-32-chars
-BOOTSTRAP_ADMIN_EMAIL=admin@example.com
-BOOTSTRAP_ADMIN_PASSWORD=your-secure-password
+cat > .env << EOF
+JWT_SECRET=$(openssl rand -hex 32)
+MONGO_USERNAME=chronos
+MONGO_PASSWORD=$(openssl rand -hex 16)
+REDIS_PASSWORD=$(openssl rand -hex 16)
+BOOTSTRAP_ADMIN_EMAIL=admin@yourorg.com
+BOOTSTRAP_ADMIN_PASSWORD=changeme
+BOOTSTRAP_ORG_ID=my-org
+EOF
 ```
 
-Start everything:
+> `JWT_SECRET` must be at least 32 characters — Chronos refuses to start without it.
+
+**3. Start**
 
 ```bash
 docker compose -f docker-compose.prod.yml up -d
@@ -71,13 +78,17 @@ docker compose -f docker-compose.prod.yml up -d
 podman-compose -f docker-compose.prod.yml up -d
 ```
 
-Open the dashboard: **http://localhost:8080**
+**4. Wait for healthy (~60s on first boot)**
+
+```bash
+docker compose -f docker-compose.prod.yml ps
+```
+
+**5. Open the dashboard: http://localhost:8080**
 
 Login with `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD`.
 
-> First boot takes ~60 seconds while Kafka initialises topics and all services become healthy.
-
-See [docs/quickstart.md](docs/quickstart.md) for the full step-by-step guide.
+See [docs/quickstart.md](docs/quickstart.md) for the full step-by-step guide including service URLs, health check script, and troubleshooting.
 
 ---
 

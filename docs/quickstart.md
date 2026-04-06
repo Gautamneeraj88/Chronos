@@ -8,37 +8,48 @@
 
 ## Deploy
 
+### 1. Download the compose file
+
 ```bash
-# 1. Download the compose file and environment template
 curl -O https://raw.githubusercontent.com/gautamneeraj88/chronos/main/docker-compose.prod.yml
-curl -O https://raw.githubusercontent.com/gautamneeraj88/chronos/main/.env.example
-cp .env.example .env
 ```
 
-```bash
-# 2. Set required values in .env
-#    Open .env in your editor and set at minimum:
-#      JWT_SECRET              — random string, at least 32 characters
-#      BOOTSTRAP_ADMIN_EMAIL   — your admin email
-#      BOOTSTRAP_ADMIN_PASSWORD — your admin password
-#    Change all passwords from 'changeme' before exposing to the internet.
-```
+### 2. Create your `.env` file
+
+Generate real secrets — do not skip this step, Chronos will refuse to start without them:
 
 ```bash
-# 3. Start the full stack
+cat > .env << EOF
+JWT_SECRET=$(openssl rand -hex 32)
+MONGO_USERNAME=chronos
+MONGO_PASSWORD=$(openssl rand -hex 16)
+REDIS_PASSWORD=$(openssl rand -hex 16)
+BOOTSTRAP_ADMIN_EMAIL=admin@yourorg.com
+BOOTSTRAP_ADMIN_PASSWORD=changeme
+BOOTSTRAP_ORG_ID=my-org
+EOF
+```
+
+> `JWT_SECRET` must be at least 32 characters. Chronos throws on startup if it is missing or too short.
+
+### 3. Start
+
+```bash
 docker compose -f docker-compose.prod.yml up -d
 # or with Podman:
 podman-compose -f docker-compose.prod.yml up -d
 ```
 
+### 4. Wait for healthy (~60s on first boot)
+
 ```bash
-# 4. Check service health (takes ~60s on first boot while Kafka initialises)
 docker compose -f docker-compose.prod.yml ps
 ```
 
-```bash
-# 5. Open the dashboard
-open http://localhost:8080
+### 5. Open the dashboard
+
+```
+http://localhost:8080
 ```
 
 ## First steps
