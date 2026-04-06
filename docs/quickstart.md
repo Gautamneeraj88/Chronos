@@ -1,3 +1,5 @@
+<img src="images/chronos-logo.svg" alt="Chronos" width="360"/>
+
 # Quick Start
 
 ## Prerequisites

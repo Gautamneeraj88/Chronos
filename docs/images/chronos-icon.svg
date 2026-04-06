@@ -1,0 +1,58 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <marker id="arr-icon" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+</defs>
+
+<!-- background -->
+<rect width="512" height="512" rx="96" fill="#0F6E56"/>
+
+<!-- ── Clock + DAG mark, centered at 256,256, scaled to fit ── -->
+<g transform="translate(256,256) scale(2.85)">
+
+  <!-- Outer ring -->
+  <circle cx="0" cy="0" r="68" fill="none" stroke="#ffffff" stroke-width="2.5" opacity="0.35"/>
+  <!-- Inner guide ring -->
+  <circle cx="0" cy="0" r="54" fill="none" stroke="#ffffff" stroke-width="1.2" opacity="0.18"/>
+
+  <!-- Tick marks (cardinal + diagonal) -->
+  <g stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" opacity="0.5">
+    <line x1="0"   y1="-68" x2="0"   y2="-56"/>
+    <line x1="0"   y1="56"  x2="0"   y2="68"/>
+    <line x1="-68" y1="0"   x2="-56" y2="0"/>
+    <line x1="56"  y1="0"   x2="68"  y2="0"/>
+    <line x1="-48" y1="-48" x2="-40" y2="-40"/>
+    <line x1="40"  y1="40"  x2="48"  y2="48"/>
+    <line x1="-48" y1="48"  x2="-40" y2="40"/>
+    <line x1="40"  y1="-40" x2="48"  y2="-48"/>
+  </g>
+
+  <!-- Clock hands -->
+  <line x1="0" y1="0" x2="32" y2="-30" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+  <line x1="0" y1="0" x2="0"  y2="-38" stroke="#ffffff" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+  <!-- Center pivot -->
+  <circle cx="0" cy="0" r="3.5" fill="#ffffff" opacity="0.7"/>
+
+  <!-- DAG edges -->
+  <line x1="-34" y1="18" x2="-6"  y2="-26" stroke="#ffffff" stroke-width="2" marker-end="url(#arr-icon)" opacity="0.85"/>
+  <line x1="10"  y1="-26" x2="28" y2="14"  stroke="#ffffff" stroke-width="2" marker-end="url(#arr-icon)" opacity="0.85"/>
+  <line x1="-26" y1="24"  x2="24" y2="24"  stroke="#ffffff" stroke-width="1.5" marker-end="url(#arr-icon)" opacity="0.5"/>
+
+  <!-- Node A — start: circle + dot, white stroke -->
+  <circle cx="-36" cy="22" r="10" fill="none" stroke="#ffffff" stroke-width="2.5"/>
+  <circle cx="-36" cy="22" r="4"  fill="#ffffff"/>
+
+  <!-- Node B — intermediate: diamond, white stroke -->
+  <g transform="translate(0,-30) rotate(45)">
+    <rect x="-8" y="-8" width="16" height="16" fill="none" stroke="#ffffff" stroke-width="2.5"/>
+  </g>
+  <circle cx="0" cy="-30" r="3" fill="#ffffff"/>
+
+  <!-- Node C — complete: double ring, white stroke -->
+  <circle cx="34" cy="22" r="10"  fill="none" stroke="#ffffff" stroke-width="2.5"/>
+  <circle cx="34" cy="22" r="5.5" fill="#ffffff"/>
+  <circle cx="34" cy="22" r="2.2" fill="#0F6E56"/>
+
+</g>
+</svg>

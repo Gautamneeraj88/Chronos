@@ -1,4 +1,4 @@
-# Chronos
+<img src="docs/images/chronos-logo.svg" alt="Chronos" width="400"/>
 
 > Self-hostable workflow orchestration engine — open source alternative to AWS Step Functions and Temporal.io
 
