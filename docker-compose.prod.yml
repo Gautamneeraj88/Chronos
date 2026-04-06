@@ -3,7 +3,7 @@ version: '3.8'
 services:
   # ── Infrastructure ───────────────────────────────────────────────────────────
   mongodb:
-    image: mongo:7
+    image: docker.io/library/mongo:7
     container_name: chronos-mongodb
     restart: unless-stopped
     environment:
@@ -36,7 +36,7 @@ services:
       - chronos-network
 
   redis:
-    image: redis:7-alpine
+    image: docker.io/library/redis:7-alpine
     container_name: chronos-redis
     restart: unless-stopped
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-changeme}
@@ -51,7 +51,7 @@ services:
       - chronos-network
 
   kafka:
-    image: apache/kafka:3.7.0
+    image: docker.io/apache/kafka:3.7.0
     container_name: chronos-kafka
     restart: unless-stopped
     environment:
@@ -80,7 +80,7 @@ services:
       - chronos-network
 
   kafka-init:
-    image: apache/kafka:3.7.0
+    image: docker.io/apache/kafka:3.7.0
     container_name: chronos-kafka-init
     depends_on:
       kafka:
@@ -96,7 +96,7 @@ services:
       - chronos-network
 
   rabbitmq:
-    image: rabbitmq:3.13-management
+    image: docker.io/library/rabbitmq:3.13-management
     container_name: chronos-rabbitmq
     restart: unless-stopped
     environment:
@@ -114,7 +114,7 @@ services:
       - chronos-network
 
   neo4j:
-    image: neo4j:5.18
+    image: docker.io/library/neo4j:5.18
     container_name: chronos-neo4j
     restart: unless-stopped
     environment:
@@ -139,7 +139,7 @@ services:
       - chronos-network
 
   jaeger:
-    image: jaegertracing/all-in-one:1.57
+    image: docker.io/jaegertracing/all-in-one:1.57
     container_name: chronos-jaeger
     restart: unless-stopped
     environment:
@@ -185,7 +185,7 @@ services:
       - chronos-network
 
   loki:
-    image: grafana/loki:2.9.0
+    image: docker.io/grafana/loki:2.9.0
     container_name: chronos-loki
     restart: unless-stopped
     volumes:
