@@ -86,7 +86,7 @@ export async function buildTestApp(): Promise<Express> {
     save: async (d) => ({ id: 'test-user', email: d.email, orgId: d.orgId, role: d.role, createdAt: new Date() }),
     count: async () => 1,
     findAll: async () => [],
-    delete: async () => {},
+    delete: async () => true,
   };
   const authService = new AuthService(noopUserRepo, 'test-secret');
 

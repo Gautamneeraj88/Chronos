@@ -1,7 +1,7 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
-import { User, AuthSession } from '@chronos/shared';
+import { User, AuthSession, NotFoundError } from '@chronos/shared';
 import { IUserRepository } from '../repositories/IUserRepository';
 import { createLogger } from '@chronos/shared';
 
@@ -96,7 +96,10 @@ export class AuthService {
     return this.userRepo.findAll(orgId);
   }
 
-  async deleteUser(id: string): Promise<void> {
-    await this.userRepo.delete(id);
+  async deleteUser(id: string, orgId: string): Promise<void> {
+    // NotFoundError fires for both: user doesn't exist AND user belongs to
+    // another org. The caller cannot distinguish the two cases — by design.
+    const deleted = await this.userRepo.delete(id, orgId);
+    if (!deleted) throw new NotFoundError('User not found');
   }
 }

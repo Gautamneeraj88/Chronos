@@ -28,6 +28,9 @@ export interface IOrchestratorClient {
   getExecution(id: string, orgId: string): Promise<Execution>;
   getExecutionEvents(executionId: string, orgId: string): Promise<DomainEvent[]>;
   listExecutions(orgId: string, status?: string): Promise<Execution[]>;
+  listDlq(orgId: string): Promise<Execution[]>;
+  replayFromDlq(executionId: string, orgId: string): Promise<void>;
+  dismissFromDlq(executionId: string, orgId: string): Promise<void>;
   workflowsByActivity(activityName: string, orgId: string): Promise<WorkflowMatch[]>;
   failurePaths(orgId: string): Promise<StepFailureStat[]>;
   bottlenecks(orgId: string): Promise<StepBottleneck[]>;
@@ -39,7 +42,7 @@ export interface IOrchestratorClient {
   refresh(token: string): Promise<AuthSession>;
   register(email: string, password: string, role: string, orgId: string, token: string): Promise<User>;
   listUsers(orgId: string, token: string): Promise<User[]>;
-  deleteUser(id: string, token: string): Promise<void>;
+  deleteUser(id: string, token: string, orgId: string): Promise<void>;
   // API key management
   listApiKeys(orgId: string): Promise<ApiKeySummary[]>;
   createApiKey(orgId: string, userId: string, name: string): Promise<{ key: ApiKeySummary; rawKey: string }>;

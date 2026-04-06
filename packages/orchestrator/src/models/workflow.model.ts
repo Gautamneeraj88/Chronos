@@ -33,6 +33,7 @@ const WorkflowSchema = new Schema<WorkflowDefinition>(
 );
 
 WorkflowSchema.index({ orgId: 1 });
+WorkflowSchema.index({ orgId: 1, createdAt: -1 }); // list by org sorted by date
 
 // INFO: Prevent model re-registration error when tests hot-reload
 export const WorkflowModel =

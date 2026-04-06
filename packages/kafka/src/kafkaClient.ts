@@ -46,6 +46,14 @@ export class KafkaClient {
     return this.consumers.get(groupId)!;
   }
 
+  /** Lightweight connectivity check — creates a transient admin client, lists topics, disconnects. */
+  async ping(): Promise<void> {
+    const admin = this.kafka.admin();
+    await admin.connect();
+    await admin.listTopics();
+    await admin.disconnect();
+  }
+
   async disconnect(): Promise<void> {
     if (this.producer) {
       await this.producer.disconnect();

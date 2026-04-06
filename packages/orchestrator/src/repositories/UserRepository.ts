@@ -44,7 +44,8 @@ export class MongoUserRepository implements IUserRepository {
     return docs.map(toUser);
   }
 
-  async delete(id: string): Promise<void> {
-    await UserModel.findByIdAndDelete(id);
+  async delete(id: string, orgId: string): Promise<boolean> {
+    const deleted = await UserModel.findOneAndDelete({ _id: id, orgId });
+    return deleted !== null;
   }
 }

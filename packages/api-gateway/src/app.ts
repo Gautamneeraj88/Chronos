@@ -22,8 +22,9 @@ export function createApp(config: GatewayConfig, deps: AppDependencies): Express
     credentials: true,
   }));
 
-  // Parse JSON bodies
-  app.use(express.json());
+  // Parse JSON bodies — 1mb limit prevents OOM from oversized workflow definitions
+  app.use(express.json({ limit: '1mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
   // Prometheus metrics — no auth required, scraped by Prometheus
   app.get('/metrics', async (_req, res) => {

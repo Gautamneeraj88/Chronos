@@ -10,7 +10,7 @@ const ConfigSchema = z.object({
   neo4jUri:      z.string().default('bolt://localhost:7687'),
   neo4jUsername: z.string().default('neo4j'),
   neo4jPassword: z.string().default('chronos_dev'),
-  jwtSecret:              z.string().default('dev_secret_change_in_prod'),
+  jwtSecret: z.string().min(32, 'JWT_SECRET must be at least 32 characters. Generate one with: openssl rand -hex 32'),
   bootstrapAdminEmail:    z.string().default(''),
   bootstrapAdminPassword: z.string().default(''),
   bootstrapOrgId:         z.string().default('default-org'),

@@ -5,6 +5,36 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [v0.10.0] — 2026-04-06 — Security Hardening
+
+- SSRF protection on webhook registration — DNS lookup + IP-range validation blocks
+  private/loopback/link-local addresses and AWS metadata endpoint before URLs are stored
+- BOLA fix — user deletion scoped to caller's `orgId`; cross-org deletes return 404
+- JWT_SECRET minimum length enforced at startup (32 chars via Zod) — dev default removed
+- Bootstrap endpoint gated by `BOOTSTRAP_ENABLED` env var — returns 403 when unset
+- Webhook secret hidden from list/get responses — returned only once on creation
+- Auth rate limiting — 10 requests/min on `/auth/login` and `/auth/register`
+- Request body size cap — `1mb` limit on all routes; `activity` field max 200 chars
+- `OrchestratorClient` interceptor — 400 → `ValidationError`, 409 → `ConflictError`
+  (previously all non-404 errors were mapped to `InternalError`)
+- `pnpm.overrides` — `handlebars >=4.7.9`, `picomatch >=2.3.2 <4 || >=4.0.4`
+
+### Security Notes
+
+- `lodash` high severity ([GHSA-r5fr-rjxr-66jc](https://github.com/advisories/GHSA-r5fr-rjxr-66jc)):
+  Not exploitable — requires attacker-controlled `_.template()` calls inside
+  `dagre`/`recharts` graph visualization libs. Advisory references a patched
+  version (`>=4.18.0`) that does not exist; lodash 4.x stopped at 4.17.21.
+  No fix available without replacing `dagre`.
+- `path-to-regexp` via express@4 ([GHSA-37ch-88jc-xwx2](https://github.com/advisories/GHSA-37ch-88jc-xwx2)):
+  ReDoS not exploitable — all routes use hardcoded patterns with no user-controlled
+  segments. The advisory's patched version (`0.1.13`) does not exist in the `0.1.x`
+  line. Fix requires upgrading to express@5.
+- All remaining moderate findings are in dev/build tooling (`ts-jest`, `eslint`)
+  and are not present in production Docker images.
+
+---
+
 ## [v0.9.0] — 2026-03-XX — Documentation + DX
 
 - `README.md` — project overview, quick start, feature list, comparison table

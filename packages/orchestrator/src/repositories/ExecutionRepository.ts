@@ -21,14 +21,55 @@ export class MongoExecutionRepository implements IExecutionRepository {
 
   async listByOrgAndStatus(orgId: string, status?: ExecutionStatus): Promise<Execution[]> {
     const query = status ? { orgId, status } : { orgId };
-    const docs = await ExecutionModel.find(query).sort({ startedAt: -1 });
-    return docs.map((d) => this.toPlain(d));
+    // Projection: exclude large fields (input/output) from list — fetch them in getExecution only
+    const docs = await ExecutionModel
+      .find(query)
+      .select('id orgId workflowId workflowVersion status currentStepIndex error startedAt completedAt createdBy')
+      .sort({ startedAt: -1 })
+      .lean();
+    return docs.map((d) => ({
+      id: d.id as string,
+      orgId: d.orgId,
+      workflowId: d.workflowId,
+      workflowVersion: d.workflowVersion,
+      status: d.status,
+      currentStepIndex: d.currentStepIndex,
+      input: {},
+      output: {},
+      error: d.error,
+      startedAt: d.startedAt,
+      completedAt: d.completedAt,
+      createdBy: d.createdBy,
+    }));
+  }
+
+  async listByDlq(orgId: string): Promise<Execution[]> {
+    const docs = await ExecutionModel
+      .find({ orgId, status: 'DLQ' })
+      .select('id orgId workflowId workflowVersion status currentStepIndex error startedAt completedAt dlqAt createdBy')
+      .sort({ dlqAt: -1 })
+      .lean();
+    return docs.map((d) => ({
+      id: d.id as string,
+      orgId: d.orgId,
+      workflowId: d.workflowId,
+      workflowVersion: d.workflowVersion,
+      status: d.status,
+      currentStepIndex: d.currentStepIndex,
+      input: {},
+      output: {},
+      error: d.error,
+      startedAt: d.startedAt,
+      completedAt: d.completedAt,
+      dlqAt: (d as unknown as { dlqAt?: Date | null }).dlqAt ?? null,
+      createdBy: d.createdBy,
+    }));
   }
 
   async updateStatus(
     id: string,
     status: ExecutionStatus,
-    extra?: Partial<Pick<Execution, 'completedAt' | 'error' | 'output' | 'currentStepIndex'>>,
+    extra?: Partial<Pick<Execution, 'completedAt' | 'error' | 'output' | 'currentStepIndex' | 'dlqAt'>>,
   ): Promise<void> {
     const result = await ExecutionModel.updateOne({ id }, { $set: { status, ...extra } });
 

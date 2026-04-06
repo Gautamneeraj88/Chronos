@@ -6,5 +6,5 @@ export interface IUserRepository {
   save(data: { email: string; passwordHash: string; orgId: string; role: 'admin' | 'member' }): Promise<User>;
   count(): Promise<number>;
   findAll(orgId: string): Promise<User[]>;
-  delete(id: string): Promise<void>;
+  delete(id: string, orgId: string): Promise<boolean>;
 }

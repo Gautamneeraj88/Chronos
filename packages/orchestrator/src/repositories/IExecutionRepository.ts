@@ -5,9 +5,10 @@ export interface IExecutionRepository {
   findById(id: string, orgId?: string): Promise<Execution | null>;
   findByStatus(status: ExecutionStatus): Promise<Execution[]>;
   listByOrgAndStatus(orgId: string, status?: ExecutionStatus): Promise<Execution[]>;
+  listByDlq(orgId: string): Promise<Execution[]>;
   updateStatus(
     id: string,
     status: ExecutionStatus,
-    extra?: Partial<Pick<Execution, 'completedAt' | 'error' | 'output' | 'currentStepIndex'>>,
+    extra?: Partial<Pick<Execution, 'completedAt' | 'error' | 'output' | 'currentStepIndex' | 'dlqAt'>>,
   ): Promise<void>;
 }

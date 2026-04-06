@@ -359,6 +359,47 @@ export class ExecutionService {
     return this.executionRepo.listByOrgAndStatus(orgId, status as ExecutionStatus | undefined);
   }
 
+  // ── DLQ operations ───────────────────────────────────────────────────────
+  async listDlq(orgId: string): Promise<Execution[]> {
+    return this.executionRepo.listByDlq(orgId);
+  }
+
+  async replayFromDlq(executionId: string, orgId: string): Promise<void> {
+    const execution = await this.executionRepo.findById(executionId, orgId);
+    if (!execution || execution.status !== 'DLQ') {
+      throw new NotFoundError('Execution not found in DLQ');
+    }
+
+    const workflow = await this.workflowRepo.findByIdAndVersion(
+      execution.workflowId,
+      execution.workflowVersion,
+      orgId,
+    );
+    if (!workflow) throw new NotFoundError(`Workflow ${execution.workflowId}`);
+
+    // Reset to PENDING and clear DLQ marker before replaying
+    await this.executionRepo.updateStatus(executionId, 'PENDING', {
+      dlqAt: null,
+      currentStepIndex: 0,
+    });
+    await this.eventRepo.append(
+      this.makeEvent(executionId, 'EXECUTION_STARTED', { type: 'DLQ_REPLAY' }),
+    );
+
+    const resetExecution = { ...execution, status: 'PENDING' as const, currentStepIndex: 0 };
+    await this.advanceExecution(resetExecution, workflow, []);
+    logger.info('Execution replayed from DLQ', { executionId, orgId });
+  }
+
+  async dismissFromDlq(executionId: string, orgId: string): Promise<void> {
+    const execution = await this.executionRepo.findById(executionId, orgId);
+    if (!execution || execution.status !== 'DLQ') {
+      throw new NotFoundError('Execution not found in DLQ');
+    }
+    await this.executionRepo.updateStatus(executionId, 'FAILED', { dlqAt: null });
+    logger.info('Execution dismissed from DLQ', { executionId, orgId });
+  }
+
   // ── Helper: create a domain event ───────────────────────────────────────
   private makeEvent(
     executionId: string,

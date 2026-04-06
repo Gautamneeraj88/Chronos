@@ -3,7 +3,8 @@ export type ExecutionStatus =
   | "RUNNING"
   | "COMPLETED"
   | "COMPENSATING"
-  | "FAILED";
+  | "FAILED"
+  | "DLQ";
 
 export interface Execution {
   id: string;
@@ -17,5 +18,6 @@ export interface Execution {
   error: string | null;
   startedAt: Date;
   completedAt: Date | null;
+  dlqAt?: Date | null;
   createdBy: string;
 }

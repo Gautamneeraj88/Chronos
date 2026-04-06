@@ -38,6 +38,9 @@ function makeOrchestrator(overrides: Partial<IOrchestratorClient> = {}): IOrches
     listWebhooks: jest.fn().mockResolvedValue([]),
     createWebhook: jest.fn().mockResolvedValue({ id: 'wh-1', orgId: 'org-test', url: 'https://example.com/hook', events: ['execution.completed'], secret: null, isActive: true, failureCount: 0, lastTriggeredAt: null, createdAt: new Date().toISOString() }),
     deleteWebhook: jest.fn().mockResolvedValue(undefined),
+    listDlq: jest.fn().mockResolvedValue([]),
+    replayFromDlq: jest.fn().mockResolvedValue(undefined),
+    dismissFromDlq: jest.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }

@@ -92,7 +92,12 @@ export function authRouter(authService: AuthService): Router {
   // DELETE /internal/auth/users/:id  (admin only)
   router.delete('/users/:id', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      await authService.deleteUser(req.params.id);
+      const orgId = req.headers['x-org-id'] as string | undefined;
+      if (!orgId) {
+        res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Missing X-Org-Id header' } });
+        return;
+      }
+      await authService.deleteUser(req.params.id, orgId);
       res.status(204).send();
     } catch (err) {
       next(err);

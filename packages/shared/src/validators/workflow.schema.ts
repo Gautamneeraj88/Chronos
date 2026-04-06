@@ -10,7 +10,7 @@ export const WorkflowStepSchema = z.object({
 
   type: z.literal('activity'),
 
-  activity: z.string().min(1, 'Activity name cannot be empty'),
+  activity: z.string().min(1, 'Activity name cannot be empty').max(200),
 
   retries: z.number().int().min(0).max(10).default(DEFAULT_RETRIES),
 

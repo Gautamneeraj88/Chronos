@@ -198,8 +198,8 @@ services:
     image: ghcr.io/gautamneeraj88/chronos/orchestrator:${CHRONOS_VERSION:-latest}
     container_name: chronos-orchestrator
     restart: unless-stopped
-    ports:
-      - '${ORCHESTRATOR_PORT:-3001}:3001'
+    # No published port — orchestrator is internal-only, reachable only by the gateway
+    # via the chronos-network bridge. Keeps bootstrap and internal APIs off the public interface.
     environment:
       NODE_ENV: production
       ORCHESTRATOR_PORT: 3001
@@ -228,23 +228,25 @@ services:
       neo4j:
         condition: service_healthy
     healthcheck:
-      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:3001/health']
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:3001/health/ready']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     networks:
       - chronos-network
 
   worker:
     image: ghcr.io/gautamneeraj88/chronos/worker:${CHRONOS_VERSION:-latest}
-    container_name: chronos-worker
+    # No container_name — replicas cannot share a static name
     restart: unless-stopped
-    ports:
-      - '${WORKER_PORT:-3002}:3002'
+    deploy:
+      replicas: 4  # matches Kafka partition count (4); each replica owns one partition
     environment:
       NODE_ENV: production
       PORT: 3002
       KAFKA_BROKERS: chronos-kafka:9092
+      KAFKA_GROUP_ID: chronos-workers  # same group ID across all replicas
       LOKI_URL: http://chronos-loki:3100
       OTEL_EXPORTER_OTLP_ENDPOINT: http://chronos-jaeger:4318/v1/traces
     depends_on:

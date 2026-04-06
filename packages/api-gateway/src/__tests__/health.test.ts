@@ -30,6 +30,9 @@ const fakeOrchestrator: IOrchestratorClient = {
   listWebhooks: jest.fn(),
   createWebhook: jest.fn(),
   deleteWebhook: jest.fn(),
+  listDlq: jest.fn(),
+  replayFromDlq: jest.fn(),
+  dismissFromDlq: jest.fn(),
 };
 
 const app = createApp(loadConfig(), { orchestratorClient: fakeOrchestrator });

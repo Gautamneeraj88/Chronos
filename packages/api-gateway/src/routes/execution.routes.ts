@@ -33,6 +33,16 @@ export function executionRouter(orchestrator: IOrchestratorClient): Router {
    *       401:
    *         description: Unauthorized
    */
+  // GET /executions/dlq — MUST be before /:id to avoid dlq being captured as id
+  router.get('/dlq', protect, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const executions = await orchestrator.listDlq(req.orgId!);
+      res.status(200).json(executions);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.get('/', protect, async (req: Request, res: Response, next: NextFunction) => {
     try {
       const status = req.query.status as string | undefined;
@@ -162,6 +172,24 @@ export function executionRouter(orchestrator: IOrchestratorClient): Router {
     try {
       const events = await orchestrator.getExecutionEvents(req.params.id, req.orgId!);
       res.status(200).json(events);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post('/:id/replay', protect, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await orchestrator.replayFromDlq(req.params.id, req.orgId!);
+      res.status(200).json({ message: 'Execution re-queued for replay' });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.delete('/:id/dlq', protect, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await orchestrator.dismissFromDlq(req.params.id, req.orgId!);
+      res.status(204).send();
     } catch (err) {
       next(err);
     }

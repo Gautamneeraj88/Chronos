@@ -4,11 +4,12 @@ import { createLogger } from '@chronos/shared';
 const logger = createLogger('orchestrator');
 
 export async function connectMongoDB(uri: string): Promise<Connection> {
-  /* NOTE:
-   * useNewUrlParser and useUnifiedTopology are defaults in mongoose 7+
-   * but setting them explicitly makes the intent clear
-   */
-  await mongoose.connect(uri);
+  await mongoose.connect(uri, {
+    maxPoolSize: 20,              // default is 5 — too low under concurrent load
+    minPoolSize: 5,
+    socketTimeoutMS: 45_000,
+    serverSelectionTimeoutMS: 5_000,
+  });
 
   mongoose.connection.on('disconnected', () => {
     logger.warn('MongoDB disconnected');

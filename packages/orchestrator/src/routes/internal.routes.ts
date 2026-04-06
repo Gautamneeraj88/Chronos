@@ -5,14 +5,18 @@ import { GraphQueryService }  from '../services/GraphQueryService';
 import { ApiKeyService }      from '../services/ApiKeyService';
 import { WebhookService }     from '../services/WebhookService';
 import { CreateWorkflowSchema, TriggerExecutionSchema, ValidationError } from '@chronos/shared';
+import { validateWebhookUrl } from '../lib/validateWebhookUrl';
 
-// Guards POST /api-keys when ADMIN_TOKEN env var is set.
-// In dev (no ADMIN_TOKEN), the route is open for bootstrapping.
-// In production, set ADMIN_TOKEN to a strong secret and pass it as X-Admin-Token.
+// Guards POST /api-keys:
+// - In production, BOOTSTRAP_ENABLED must be set to allow key creation via this endpoint.
+// - When ADMIN_TOKEN env var is also set, the caller must supply it as X-Admin-Token.
 function requireAdminToken(req: Request, res: Response, next: NextFunction): void {
+  if (!process.env.BOOTSTRAP_ENABLED) {
+    res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Bootstrap endpoint is disabled. Set BOOTSTRAP_ENABLED=true to enable.' } });
+    return;
+  }
   const adminToken = process.env.ADMIN_TOKEN;
   if (!adminToken) {
-    // No token configured — allow (dev/bootstrap mode)
     next();
     return;
   }
@@ -116,10 +120,40 @@ export function internalRouter(
     }
   });
 
+  // GET /internal/executions/dlq — MUST be before /:id to avoid dlq being captured as id
+  router.get('/executions/dlq', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const executions = await executionService.listDlq(getOrgId(req));
+      res.status(200).json(executions);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.get('/executions/:id/events', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const events = await executionService.getExecutionEvents(req.params.id);
       res.status(200).json(events);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // POST /internal/executions/:id/replay — re-enqueue from DLQ
+  router.post('/executions/:id/replay', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await executionService.replayFromDlq(req.params.id, getOrgId(req));
+      res.status(200).json({ message: 'Execution re-queued for replay' });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // DELETE /internal/executions/:id/dlq — dismiss from DLQ without replay
+  router.delete('/executions/:id/dlq', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await executionService.dismissFromDlq(req.params.id, getOrgId(req));
+      res.status(204).send();
     } catch (err) {
       next(err);
     }
@@ -293,6 +327,12 @@ export function internalRouter(
       const { url, events, secret } = req.body;
       if (!url) throw new ValidationError('url is required');
       if (!Array.isArray(events) || events.length === 0) throw new ValidationError('events must be a non-empty array');
+      // Reject SSRF targets at registration time so bad URLs are never stored
+      try {
+        await validateWebhookUrl(url);
+      } catch (ssrfErr) {
+        throw new ValidationError((ssrfErr as Error).message);
+      }
       const webhook = await webhookService.create(getOrgId(req), { url, events, secret });
       res.status(201).json(webhook);
     } catch (err) {

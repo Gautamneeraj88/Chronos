@@ -1,7 +1,22 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import rateLimit from 'express-rate-limit';
 import { IOrchestratorClient } from '../http/IOrchestratorClient';
 import { authMiddleware, requireAdmin } from '../middleware/auth.middleware';
 import { UnauthorizedError } from '@chronos/shared';
+
+// Tighter limit on auth endpoints to prevent brute-force / credential stuffing
+const authLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: {
+      code: 'RATE_LIMITED',
+      message: 'Too many attempts. Try again in a minute.',
+    },
+  },
+});
 
 export function authRouter(orchestratorClient: IOrchestratorClient): Router {
   const router = Router();
@@ -44,7 +59,7 @@ export function authRouter(orchestratorClient: IOrchestratorClient): Router {
    *       401:
    *         description: Invalid credentials
    */
-  router.post('/login', async (req: Request, res: Response, next: NextFunction) => {
+  router.post('/login', authLimiter, async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { email, password } = req.body as { email?: string; password?: string };
       if (!email || !password) {
@@ -158,7 +173,7 @@ export function authRouter(orchestratorClient: IOrchestratorClient): Router {
    *       403:
    *         description: Admin role required
    */
-  router.post('/register', auth, requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  router.post('/register', authLimiter, auth, requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { email, password, role } = req.body as { email?: string; password?: string; role?: string };
       if (!email || !password) {
@@ -230,7 +245,7 @@ export function authRouter(orchestratorClient: IOrchestratorClient): Router {
   router.delete('/users/:id', auth, requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
     try {
       const token = req.headers.authorization!.slice(7);
-      await orchestratorClient.deleteUser(req.params.id, token);
+      await orchestratorClient.deleteUser(req.params.id, token, req.orgId!);
       res.status(204).send();
     } catch (err) {
       next(err);

@@ -1,7 +1,7 @@
 import swaggerJSDoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 import { RequestHandler } from 'express';
-import path from 'path';
+import path from 'path'; 
 
 const definition = {
   openapi: '3.0.0',

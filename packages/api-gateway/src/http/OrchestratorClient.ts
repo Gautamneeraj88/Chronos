@@ -6,6 +6,8 @@ import {
   CreateWorkflowInput,
   NotFoundError,
   InternalError,
+  ValidationError,
+  ConflictError,
   User,
   AuthSession,
 } from '@chronos/shared';
@@ -36,7 +38,9 @@ export class OrchestratorClient implements IOrchestratorClient {
         const status = err.response?.status;
         const message = err.response?.data?.error?.message ?? err.message;
 
+        if (status === 400) throw new ValidationError(message);
         if (status === 404) throw new NotFoundError(message);
+        if (status === 409) throw new ConflictError(message);
         throw new InternalError(message ?? `orchestrator error: ${status}`);
       },
     );
@@ -107,6 +111,25 @@ export class OrchestratorClient implements IOrchestratorClient {
       params,
     });
     return res;
+  }
+
+  async listDlq(orgId: string): Promise<Execution[]> {
+    const { data: res } = await this.http.get('/internal/executions/dlq', {
+      headers: { 'X-Org-Id': orgId },
+    });
+    return res;
+  }
+
+  async replayFromDlq(executionId: string, orgId: string): Promise<void> {
+    await this.http.post(`/internal/executions/${executionId}/replay`, {}, {
+      headers: { 'X-Org-Id': orgId },
+    });
+  }
+
+  async dismissFromDlq(executionId: string, orgId: string): Promise<void> {
+    await this.http.delete(`/internal/executions/${executionId}/dlq`, {
+      headers: { 'X-Org-Id': orgId },
+    });
   }
 
   async workflowsByActivity(activityName: string, orgId: string): Promise<WorkflowMatch[]> {
@@ -205,9 +228,12 @@ export class OrchestratorClient implements IOrchestratorClient {
     return res.users;
   }
 
-  async deleteUser(id: string, token: string): Promise<void> {
+  async deleteUser(id: string, token: string, orgId: string): Promise<void> {
     await this.http.delete(`/internal/auth/users/${id}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'X-Org-Id': orgId,
+      },
     });
   }
 

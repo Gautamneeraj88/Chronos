@@ -12,6 +12,8 @@ export function connectRedis(url: string): Redis {
     maxRetriesPerRequest: 3,
     enableReadyCheck: true,
     lazyConnect: false,
+    enableOfflineQueue: false, // fail fast rather than queue indefinitely when Redis is down
+    connectTimeout: 5_000,
   });
 
   client.on('connect', () => logger.info('Redis connected'));

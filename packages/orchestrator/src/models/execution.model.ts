@@ -17,6 +17,7 @@ const ExecutionSchema = new Schema<Execution>(
         'COMPLETED',
         'COMPENSATING',
         'FAILED',
+        'DLQ',
       ] satisfies ExecutionStatus[],
       default: 'PENDING',
     },
@@ -26,6 +27,7 @@ const ExecutionSchema = new Schema<Execution>(
     error: { type: String, default: null },
     startedAt: { type: Date, required: true },
     completedAt: { type: Date, default: null },
+    dlqAt: { type: Date, default: null },
     createdBy: { type: String, required: true },
   },
   {
@@ -34,12 +36,14 @@ const ExecutionSchema = new Schema<Execution>(
   },
 );
 
-// Index for RecoveryEngine — it queries by status on startup
-ExecutionSchema.index({ status: 1 });
-// Index for filtering by workflow
-ExecutionSchema.index({ workflowId: 1 });
-// Index for org-scoped queries
-ExecutionSchema.index({ orgId: 1 });
+// Existing single-field indexes
+ExecutionSchema.index({ status: 1 });           // RecoveryEngine — queries by status on startup
+ExecutionSchema.index({ workflowId: 1 });       // filter by workflow
+ExecutionSchema.index({ orgId: 1 });            // org-scoped queries
+// Compound indexes for list queries (Phase 11 — eliminates collection scans)
+ExecutionSchema.index({ orgId: 1, createdAt: -1 });   // list by org sorted by date (primary list path)
+ExecutionSchema.index({ orgId: 1, status: 1 });       // filter by status within org
+ExecutionSchema.index({ workflowId: 1, orgId: 1 });   // filter by workflow within org
 
 export const ExecutionModel =
   mongoose.models.Execution ?? mongoose.model<Execution>('Execution', ExecutionSchema);
