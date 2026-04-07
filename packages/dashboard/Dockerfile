@@ -28,9 +28,12 @@ FROM nginx:alpine AS runtime
 
 COPY --from=builder /app/packages/dashboard/dist /usr/share/nginx/html
 COPY packages/dashboard/nginx.conf /etc/nginx/conf.d/default.conf
+COPY packages/dashboard/docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
 HEALTHCHECK --interval=10s --timeout=5s --retries=5 \
   CMD wget --quiet --tries=1 --spider http://localhost:80/health || exit 1
 
 EXPOSE 80
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["nginx", "-g", "daemon off;"]
