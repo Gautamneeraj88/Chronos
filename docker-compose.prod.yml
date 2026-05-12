@@ -13,7 +13,9 @@ services:
     volumes:
       - mongodb_data:/data/db
     healthcheck:
-      test: ['CMD', 'mongosh', '--host', 'localhost', '--eval', "db.adminCommand('ping')", '--quiet']
+      test:
+        - CMD-SHELL
+        - mongosh --host localhost --eval "db.adminCommand('ping')" --quiet
       interval: 10s
       timeout: 5s
       retries: 5
@@ -29,7 +31,9 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD:-changeme}', 'ping']
+      test:
+        - CMD-SHELL
+        - redis-cli -a '${REDIS_PASSWORD:-changeme}' ping
       interval: 10s
       timeout: 5s
       retries: 5
@@ -92,7 +96,9 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
-      test: ['CMD', 'rabbitmq-diagnostics', 'ping']
+      test:
+        - CMD-SHELL
+        - rabbitmq-diagnostics ping
       interval: 10s
       timeout: 10s
       retries: 5
