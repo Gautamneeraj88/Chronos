@@ -13,7 +13,9 @@ services:
     volumes:
       - mongodb_data:/data/db
     healthcheck:
-      test: ['CMD', 'mongosh', '--host', 'localhost', '--eval', "db.adminCommand('ping')", '--quiet']
+      test:
+        - CMD-SHELL
+        - mongosh --host localhost --eval "db.adminCommand('ping')" --quiet
       interval: 10s
       timeout: 5s
       retries: 5
@@ -29,7 +31,9 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD:-changeme}', 'ping']
+      test:
+        - CMD-SHELL
+        - redis-cli -a '${REDIS_PASSWORD:-changeme}' ping
       interval: 10s
       timeout: 5s
       retries: 5
@@ -92,7 +96,9 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
-      test: ['CMD', 'rabbitmq-diagnostics', 'ping']
+      test:
+        - CMD-SHELL
+        - rabbitmq-diagnostics ping
       interval: 10s
       timeout: 10s
       retries: 5
@@ -109,7 +115,9 @@ services:
       - neo4j_data:/data
       - neo4j_logs:/logs
     healthcheck:
-      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:7474']
+      test:
+        - CMD-SHELL
+        - wget --quiet --tries=1 --spider http://localhost:7474
       interval: 10s
       timeout: 10s
       retries: 10
@@ -137,7 +145,9 @@ services:
       - '--storage.tsdb.path=/prometheus'
       - '--web.enable-lifecycle'
     healthcheck:
-      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:9090/-/healthy']
+      test:
+        - CMD-SHELL
+        - wget --quiet --tries=1 --spider http://localhost:9090/-/healthy
       interval: 10s
       timeout: 5s
       retries: 5
@@ -207,7 +217,9 @@ services:
       neo4j:
         condition: service_healthy
     healthcheck:
-      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:3001/health/ready']
+      test:
+        - CMD-SHELL
+        - wget --quiet --tries=1 --spider http://localhost:3001/health/ready
       interval: 30s
       timeout: 10s
       retries: 3
@@ -232,7 +244,9 @@ services:
       kafka:
         condition: service_healthy
     healthcheck:
-      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:3002/health']
+      test:
+        - CMD-SHELL
+        - wget --quiet --tries=1 --spider http://localhost:3002/health
       interval: 10s
       timeout: 5s
       retries: 5
@@ -258,7 +272,9 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:3000/health']
+      test:
+        - CMD-SHELL
+        - wget --quiet --tries=1 --spider http://localhost:3000/health
       interval: 10s
       timeout: 5s
       retries: 5
@@ -281,7 +297,9 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:3003/health']
+      test:
+        - CMD-SHELL
+        - wget --quiet --tries=1 --spider http://localhost:3003/health
       interval: 10s
       timeout: 5s
       retries: 5
@@ -298,7 +316,9 @@ services:
       gateway:
         condition: service_healthy
     healthcheck:
-      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:80/health']
+      test:
+        - CMD-SHELL
+        - wget --quiet --tries=1 --spider http://127.0.0.1:80/health
       interval: 10s
       timeout: 5s
       retries: 5
